@@ -11,7 +11,8 @@ from __future__ import print_function
 import os
 import sys
 import time
-import getopt
+#import getopt
+import argparse #transitioned from getopt
 import csv
 import itertools
 import HTSeq
@@ -25,8 +26,8 @@ import xml.etree.ElementTree as ET
 import mucorfilters as mf
 
 class Info:
-	'''Program info: logo, version, and usage'''
-	logo = """
+    '''Program info: logo, version, and usage'''
+    logo = """
  __    __     __  __     ______     ______     ______    
 /\ "-./  \   /\ \/\ \   /\  ___\   /\  __ \   /\  == \   
 \ \ \-./\ \  \ \ \_\ \  \ \ \____  \ \ \/\ \  \ \  __<   
@@ -34,9 +35,9 @@ class Info:
   \/_/  \/_/   \/_____/   \/_____/   \/_____/   \/_/ /_/ 
                                   
 """
-	version = "0.16"
-	versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
-	usage = """
+    version = "0.16"
+    versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
+    usage = """
 Usage:
 {0} [-h] | -g featurefile.gff -f feature_type [-u] -o <output_dir> <mutect001.txt mutect002.txt ... mutectNNN.txt>
 
@@ -75,6 +76,32 @@ Input files:
 	Final arguments should be a list of mutations in muTect output format
 
 """
+    description = """
+
+mucor: MUtation CORrelation
+
+mucor reads in variant files from a variety of sources (VCF, muTect .out)
+and counts the number of mutations falling into known features. These are
+grouped together and output to see which features (genes) and which spec-
+-ific locations within those genes have the highest frequency of mutation
+within a group.
+"""
+    epilog = """
+
+Output directory:
+	Output files will be placed in the specified directory.
+	If the directory already exists, an error will occur (won't overwrite)
+
+	Output consists of CSV spreadsheets (.txt):
+		1. Plain text report of # variants binned according to feature_type
+		2. Summary of pre-filter and post-filter variants
+		3. Detailed report of all variants by feature_type
+
+Input files:
+	<mutect001.txt mutect002.txt ... mutectNNN.txt>
+	Final arguments should be a list of mutations in muTect output format
+"""
+
 
 class Variant:
 	'''Data about SNV (and Indels - TO DO)'''
@@ -156,13 +183,8 @@ class MucorFeature(HTSeq.GenomicFeature):
 			sources.add(var.source)
 		return len(sources)
 
-def usage():
-	scriptName = sys.argv[0]
-	print(Info.usage.format(scriptName))
-
 def abortWithMessage(message, help = False):
 	print("*** FATAL ERROR: " + message + " ***")
-	if help: usage()
 	exit(2)
 
 ######## Karl Added ##############   makes a dictionary out of dbSNP, with tuple of chrom,position as the key and the rs number as values.
@@ -572,73 +594,88 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
 
 
 def main(argv):
-	print(Info.logo)
-	print(Info.versionInfo)
+    print(Info.logo)
+    print(Info.versionInfo)
 
-	print("\n=== Run Info ===")
-	print("\t{0}".format(time.ctime() ) )
-	print("\tCommand line: {0}".format(str(argv) ) )
+    print("\n=== Run Info ===")
+    print("\t{0}".format(time.ctime() ) )
+    print()
 
-	# initialize to empty in case not specified
-	gffFileName = ""
-	featureType = ""
-	outputDirName = ""
+    parser = argparse.ArgumentParser(description=Info.description, epilog=Info.epilog, formatter_class=argparse.RawDescriptionHelpFormatter)
 
-	try:
-		opts, args = getopt.getopt(argv, "hg:f:uo:", ["help", "gff=", "feature_type=", "union", "output="])
-	except getopt.GetoptError:
-		usage()
-		sys.exit(1)
-	for opt, arg in opts:
-		if opt in ("-h", "--help"):
-			usage()
-			sys.exit()
-		elif opt in ("-g", "--gff"):
-			gffFileName = arg
-			if not os.path.exists(gffFileName):
-				abortWithMessage("Could not find GFF file {0}".format(gffFileName))
-		elif opt in ("-f", "--feature_type"):
-			featureType = arg
-		elif opt in ("-o", "--output"):
-			outputDirName = arg
-			if os.path.exists(outputDirName):
-				abortWithMessage("The directory {0} already exists. Will not overwrite.".format(outputDirName))
-			else:
-				try:
-					os.makedirs(outputDirName)
-				except:
-					abortWithMessage("Error when creating output directory {0}".format(outputDirName))
+    parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
+    parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
+    parser.add_argument("-u", "--union", action="store_true", help="""
+        Join all items with same ID for feature_type (specified by -f)
+        into a single, continuous bin. For example, if you want intronic
+        variants counted with a gene, use this option. 
+        ** TO DO **
+        WARNING, this will likely lead to spurious results due to things
+        like MIR4283-2 which exists twice on + and - strand of the same
+        chromosome over 1 megabase apart. This creates one huge spurious
+        bin.
+        """)
+    
+    parser.add_argument("-o", "--output", required=True, help="Output directory name")
+    parser.add_argument("variantfiles", nargs='+', help="List of variant files to muCorrelate")
+    
+    args = parser.parse_args()
+    
+    if not os.path.exists(args.gff):
+        abortWithMessage("Could not find GFF file {0}".format(args.gff))
+    if os.path.exists(args.output):
+        abortWithMessage("The directory {0} already exists. Will not overwrite.".format(args.output))
+    else:
+        try:
+            os.makedirs(args.output)
+        except:
+            abortWithMessage("Error when creating output directory {0}".format(outputDirName))
+
+    #opts, args = getopt.getopt(argv, "hg:f:uo:", ["help", "gff=", "feature_type=", "union", "output="])
+	#except getopt.GetoptError:
+	#	usage()
+	#	sys.exit(1)
+	
+    #for opt, arg in opts:
+	#	if opt in ("-h", "--help"):
+	#		usage()
+	#		sys.exit()
+	#	elif opt in ("-g", "--gff"):
+	#		gffFileName = arg
+	#		if not os.path.exists(gffFileName):
+	#			abortWithMessage("Could not find GFF file {0}".format(gffFileName))
+	#	elif opt in ("-f", "--feature_type"):
+	#		featureType = arg
+	#	elif opt in ("-o", "--output"):
+	#		outputDirName = arg
+	#		if os.path.exists(outputDirName):
+	#			abortWithMessage("The directory {0} already exists. Will not overwrite.".format(outputDirName))
+	#		else:
+	#			try:
+	#				os.makedirs(outputDirName)
+	#			except:
+	#				abortWithMessage("Error when creating output directory {0}".format(outputDirName))
 
 	# everything remaining is arguments, i.e. the variant files
-	variantFiles = args
-	
-	# Check that options were correctly specified
-	if gffFileName == '':
-		abortWithMessage("GFF file was not specified", help = True)
-	elif featureType == '':
-		abortWithMessage("Feature type was not specified", help = True)
-	elif outputDirName == '':
-		abortWithMessage("Output directory name not specified", help = True)
-	if len(args) == 0:
-		# args contains the muTect filenames passed
-		abortWithMessage("muTect source files were not specified", help = True)
+	#variantFiles = args
+    #args.variantFiles    # todo list if multiple; check if single item list (or not) for 1 file
 
 	# check that all specified variant files exist
-	for fn in variantFiles:
-		if not os.path.exists(fn):
-			abortWithMessage("Could not find variant file: {0}".format(fn))
+    for fn in args.variantfiles:
+        if not os.path.exists(fn):
+            abortWithMessage("Could not find variant file: {0}".format(fn))
 
 
-	knownFeatures, gas = parseGffFile(gffFileName, featureType)
+    knownFeatures, gas = parseGffFile(args.gff, args.featuretype)
 
-	snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
+    snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
 
-	knownFeatures, gas, snps = parseVariantFiles(variantFiles, knownFeatures, gas, snps)
+    knownFeatures, gas, snps = parseVariantFiles(args.variantfiles, knownFeatures, gas, snps)
 
-	printOutput(argv, outputDirName, knownFeatures, gas, snps) ######## Karl Modified ##############
+    printOutput(argv, args.output, knownFeatures, gas, snps) ######## Karl Modified ##############
 
-	# pretty print newline before exit
-	print()
+    # pretty print newline before exit
+    print()
 
 
 if __name__ == "__main__":
