@@ -11,7 +11,6 @@ from __future__ import print_function
 import os
 import sys
 import time
-#import getopt
 import argparse #transitioned from getopt
 import csv
 import itertools
@@ -630,35 +629,6 @@ def main(argv):
             os.makedirs(args.output)
         except:
             abortWithMessage("Error when creating output directory {0}".format(outputDirName))
-
-    #opts, args = getopt.getopt(argv, "hg:f:uo:", ["help", "gff=", "feature_type=", "union", "output="])
-	#except getopt.GetoptError:
-	#	usage()
-	#	sys.exit(1)
-	
-    #for opt, arg in opts:
-	#	if opt in ("-h", "--help"):
-	#		usage()
-	#		sys.exit()
-	#	elif opt in ("-g", "--gff"):
-	#		gffFileName = arg
-	#		if not os.path.exists(gffFileName):
-	#			abortWithMessage("Could not find GFF file {0}".format(gffFileName))
-	#	elif opt in ("-f", "--feature_type"):
-	#		featureType = arg
-	#	elif opt in ("-o", "--output"):
-	#		outputDirName = arg
-	#		if os.path.exists(outputDirName):
-	#			abortWithMessage("The directory {0} already exists. Will not overwrite.".format(outputDirName))
-	#		else:
-	#			try:
-	#				os.makedirs(outputDirName)
-	#			except:
-	#				abortWithMessage("Error when creating output directory {0}".format(outputDirName))
-
-	# everything remaining is arguments, i.e. the variant files
-	#variantFiles = args
-    #args.variantFiles    # todo list if multiple; check if single item list (or not) for 1 file
 
 	# check that all specified variant files exist
     for fn in args.variantfiles:
