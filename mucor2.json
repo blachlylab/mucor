@@ -1,0 +1,24 @@
+{
+    "run_name": "output1",
+    "gtf":      "~/data/ref/gencode19/gencode.v19.annotation.gtf",
+    "feature":  "gene_id",
+    "union":    false,
+    "filters":  ["MUTECT-KEEP", "VCF-PASS"],
+    "samples":  [   {   "id":           "C-01-1111",
+                        "files": [  {   "type": "mutect",
+                                        "name": "C-01-1111.out" },
+                                    {   "type": "vcf",
+                                        "snpeff": true,
+                                        "name": "C-01-1111.snpeff.vcf" }
+                                 ]
+                    },
+                    {   "id":           "C-01-2222",
+                        "files": [ {    "type": "mutect",
+                                        "name": "C-01-2222.out" },
+                                    {   "type": "vcf",
+                                        "snpeff": true,
+                                        "name": "C-01-2222.snpeff.vcf" }
+                                 ]
+                    }
+                ]
+}
