@@ -105,11 +105,15 @@ Input files:
 	Final arguments should be a list of mutations in muTect output format
 """
 
-def abortWithMessage(message, help = False):
+def abortWithMessage(message):
 	print("*** FATAL ERROR: " + message + " ***")
 	exit(2)
 
-######## Karl Added ##############   makes a dictionary out of dbSNP, with tuple of chrom,position as the key and the rs number as values.
+
+######## Karl Added ##############
+# makes a dictionary out of dbSNP,
+# with tuple of chrom,position as the key; and the rs number as values.
+#
 def load_dbsnp():
 	startTime = time.clock()
 	snps = defaultdict(str)
@@ -132,8 +136,10 @@ def load_dbsnp():
 
 ##################################
 
-######## Karl Added ##############   true or false to check if a location (tuple of chrom,position) is in the dbSNP dictionary. 
-#									 must use defaultdict above to avoid key errors here
+######## Karl Added ##############
+# true or false to check if a location
+# (tuple of chrom,position) is in the dbSNP dictionary. 
+# must use defaultdict above to avoid key errors here
 def in_dbsnp(snps, loc):
 	status = False
 	annotation = snps[loc]
