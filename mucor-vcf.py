@@ -404,7 +404,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 			else:
 				print("This isn't MiSeq, IonTorrent, SomaticIndelDetector, or Mutect data?")
 				sys.exit(1)
-			var = Variant(source=fn, pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'))
+			var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'))
 			###########################################
 
 			# find bin for variant location
@@ -508,7 +508,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
 					ofVariantDetails.write(var.alt + '\t')
 					ofVariantDetails.write(var.frac + '\t')
 					ofVariantDetails.write(var.dp + '\t')
-					ofVariantDetails.write(var.eff + '\t')
+					ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).strip(']').strip('[').strip("'") + '\t')
 					ofVariantDetails.write(var.source + '\t')
 					if MuTect_switch:
 						ofVariantDetails.write(MuTect_Annotations[(var.pos.chrom, var.pos.pos)] + '\t')
