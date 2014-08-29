@@ -23,6 +23,7 @@ import pdb
 import xml.etree.ElementTree as ET
 import json
 
+import numpy as np
 import pandas as pd
 
 # mucor modules
@@ -612,8 +613,9 @@ def main(argv):
     # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
     # so we will sort by feature (gene etc.) then position
     varDF.sort(columns=['feature','pos'], inplace=True)
-    varDF.to_csv(args.output + '/allvars.txt', sep='\t', na_rep='?unknown?', index=False)
-
+    varDF.replace('', np.nan, inplace=True)
+    varDF.to_csv(args.output + '/allvars.txt', sep='\t', na_rep='?', index=False)
+    
     # pretty print newline before exit
     print()
 
