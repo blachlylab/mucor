@@ -23,6 +23,8 @@ import pdb
 import xml.etree.ElementTree as ET
 import json
 
+import pandas as pd
+
 # mucor modules
 import mucorfilters as mf
 from variant import Variant
@@ -319,6 +321,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
     global MuTect_Annotations
     MuTect_Annotations = defaultdict(str)
 
+    # All variants stored in long (record) format
+    # in a pandas dataframe
+    varDF = pd.DataFrame(columns=('chr','pos','ref','alt','vf','dp','feature','effect','sample','source') )
+
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
         #print("\t{0}\t".format(fn), end='')    # moved to end to print after clock
@@ -414,11 +420,33 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
                 #print(gas[ var.pos ])      # 
                 for featureName in resultSet:
                     knownFeatures[featureName].variants.add(var)
+            
+            # Descriptive variable names
+            chr = row[0]
+            pos = int(position)
+            ref = row[3]
+            alt = row[4]
+            vf = VF     # to do, change (karl capitalizes)
+            dp = DP     # to do, change (karl capitalizes)
+            feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
+            effect = EFF
+            sample = fn.split('/')[-1]      # to do, will need to come from JSON config
+            source = fn.split('/')[-1]
 
-        
+            # build dict to insert
+            #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
+            vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','sample','source'], \
+                                [ chr , pos , ref , alt , vf , dp , feature , effect , sample , source ])) 
+            # add to variants data frame
+            varDF = varDF.append(vardata, ignore_index=True)
+
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
-    return knownFeatures, gas, snps
+    
+    # Clean up variant dataframe a little
+    # position should be integer, not float
+    varDF.pos = varDF.pos.astype(int)
+    return varDF, knownFeatures, gas, snps
 
 def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Modified ##############
     '''Output statistics and variant details to the specified output directory.'''
@@ -568,9 +596,23 @@ def main(argv):
 
     snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
 
-    knownFeatures, gas, snps = parseVariantFiles(args.variantfiles, knownFeatures, gas, snps)
-
+    varDF, knownFeatures, gas, snps = parseVariantFiles(args.variantfiles, knownFeatures, gas, snps)
+    
     printOutput(argv, args.output, knownFeatures, gas, snps) ######## Karl Modified ##############
+    
+    ## ## ##
+    # print record format (long format) all variants data frame
+    # TO DO : break out into function to slicing and dicing
+    #if (varDF['chr'][0].lower().startswith(('chr', 'Chr'))):
+    #    varDF['chr_num'] = varDF['chr'].apply(lambda x:x[3:]).astype(int)   # strip off the 'chr', unstringify
+    #    varDF.sort(columns=['chr_num', 'pos'], inplace=True)
+    #   varDF.drop(['chr_num'], axis=1, inplace=True)
+    #else: 
+    
+    # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
+    # so we will sort by feature (gene etc.) then position
+    varDF.sort(columns=['feature','pos'], inplace=True)
+    varDF.to_csv(args.output + '/allvars.txt', sep='\t', na_rep='?unknown?', index=False)
 
     # pretty print newline before exit
     print()
