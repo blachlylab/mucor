@@ -321,7 +321,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
-        print("\t{0}\t".format(fn), end='')
+        #print("\t{0}\t".format(fn), end='')    # moved to end to print after clock
 
         varFile = open(fn, 'rb')    # TO DO: error handling
         varReader = csv.reader(varFile, delimiter='\t')
@@ -417,8 +417,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
         
         totalTime = time.clock() - startTime
-        print("{0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
-
+        print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     return knownFeatures, gas, snps
 
 def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Modified ##############
