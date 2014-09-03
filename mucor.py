@@ -18,7 +18,7 @@ import HTSeq
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-import pdb
+import pdb   #pdb.set_trace()
 
 import xml.etree.ElementTree as ET
 import json
@@ -151,7 +151,7 @@ def in_dbsnp(snps, loc):
     return status
 ##################################
 
-def parseGffFile(gffFileName, featureType):
+def parseGffFile(gffFileName, featureType, fast):
     '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
     Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)'''
     
@@ -161,7 +161,23 @@ def parseGffFile(gffFileName, featureType):
     startTime = time.clock()
     print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
     
-    gffFile = HTSeq.GFF_Reader(gffFileName)
+    scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
+    annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
+    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('.p')
+    if fast:
+        ## You have the NEED for SPEED
+        if os.path.exists( archiveFilePath ):
+            print("Opening annotation archive: " + str(archiveFilePath))
+            gffFile = pickle.load(open(archiveFilePath, 'rb'))
+        else:
+            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]))
+            print("   Reading in annotation and saving archive for faster future runs") 
+            gffFile = HTSeq.GFF_Reader(gffFileName)
+            archiveOut = open(archiveFilePath, 'wb')
+            pickle.dump(gffFile, archiveOut)
+    if not fast:
+        ## Slow and steady wins the race
+        gffFile = HTSeq.GFF_Reader(gffFileName)
     
     #ga = HTSeq.GenomicArray("auto", typecode="i")  # typecode i is integer
     
@@ -219,7 +235,7 @@ def parseGffFile(gffFileName, featureType):
             print(feat.name)
             print(feat.iv)
             raise
-
+    #pdb.set_trace()
     if duplicateFeatures:
         print("*** WARNING: {0} {1}'s found on more than one contig".format(len(duplicateFeatures), featureType))
 
@@ -324,7 +340,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
     # All variants stored in long (record) format
     # in a pandas dataframe
-    varDF = pd.DataFrame(columns=('chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source') )
+    ###varDF = pd.DataFrame(columns=('chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source') )
+    varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'datab':[],'sample':[],'source':[]}
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
@@ -441,13 +458,17 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'], \
                                 [ chr , pos , ref , alt , vf , dp , feature , effect , datab , sample , source ])) 
             # add to variants data frame
-            varDF = varDF.append(vardata, ignore_index=True)
+            for key in vardata.keys():
+                varD[key].append(vardata[key])
+            ####varDF = varDF.append(vardata, ignore_index=True)
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
     # Clean up variant dataframe a little
     # position should be integer, not float
+    #pdb.set_trace()
+    varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'])
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas, snps
 
@@ -576,9 +597,10 @@ def main(argv):
     
     parser.add_argument("-o", "--output", required=True, help="Output directory name")
     parser.add_argument("variantfiles", nargs='+', help="List of variant files to muCorrelate")
+    parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
     
     args = parser.parse_args()
-    
+
     if not os.path.exists(args.gff):
         abortWithMessage("Could not find GFF file {0}".format(args.gff))
     if os.path.exists(args.output):
@@ -594,8 +616,9 @@ def main(argv):
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
 
+    fast = args.no_archive
 
-    knownFeatures, gas = parseGffFile(args.gff, args.featuretype)
+    knownFeatures, gas = parseGffFile(args.gff, args.featuretype, fast)
 
     snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
 
