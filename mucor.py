@@ -18,7 +18,7 @@ import HTSeq
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-import pdb   #pdb.set_trace()
+import pdb
 
 import xml.etree.ElementTree as ET
 import json
@@ -324,7 +324,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
     # All variants stored in long (record) format
     # in a pandas dataframe
-    varDF = pd.DataFrame(index=np.arange(0,4), columns=('chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source') )
+    varDF = pd.DataFrame(columns=('chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source') )
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
@@ -413,7 +413,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
                 sys.exit(1)
             var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'))
             ###########################################
-            
+
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
             if resultSet:                   # which I'll use as a key on the knownFeactures dict
@@ -440,14 +440,14 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'], \
                                 [ chr , pos , ref , alt , vf , dp , feature , effect , datab , sample , source ])) 
-            pdb.set_trace()
             # add to variants data frame
             varDF = varDF.append(vardata, ignore_index=True)
+
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
+    
     # Clean up variant dataframe a little
     # position should be integer, not float
-    #pdb.set_trace()
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas, snps
 
