@@ -149,8 +149,9 @@ def in_dbsnp(snps, loc):
     if str(annotation).startswith('rs'):
         status = True
     return status
-##################################
 
+######## Karl Modified ##############
+# new, separate function to construct the genomic array of sets
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
@@ -228,7 +229,6 @@ def parseGffFile(gffFileName, featureType, fast):
     # then no genes on the - strand would have variants binned to them
 
     if fast:
-        ## You have the NEED for SPEED
         if os.path.exists( archiveFilePath ):
             print("Opening annotation archive: " + str(archiveFilePath))
             pAnnot = open(archiveFilePath, 'rb')
@@ -236,69 +236,19 @@ def parseGffFile(gffFileName, featureType, fast):
             knownFeatures = pickle.load(pAnnot)
             duplicateFeatures = pickle.load(pAnnot)
             pAnnot.close()
-            #pdb.set_trace()
         else:
             print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]))
             print("   Reading in annotation and saving archive for faster future runs") 
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
             archiveOut = open(archiveFilePath, 'wb')
-            #pAnnot = [ gas, knownFeatures, duplicateFeatures ]
-            pickle.dump(gas, archiveOut)
+            pickle.dump(gas, archiveOut) ### pickle feature only works with full annotation files
             pickle.dump(knownFeatures, archiveOut)
             pickle.dump(duplicateFeatures, archiveOut)
             archiveOut.close()
-            #pdb.set_trace()
     if not fast:
-        ## Slow and steady wins the race
+	# ignore pickles function
         gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
-        #pdb.set_trace()
-    '''
-    gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
-    for feature in itertools.islice(gffFile, 0, None):
-        # Nonstandard contigs (eg chr17_ctg5_hap1, chr19_gl000209_random, chrUn_...)
-        # must be specifically excluded, otherwise you will end up with exception
-        # ValueError: start is larger than end due to duplicated gene symbols
-        if "_hap" in feature.iv.chrom:
-            continue
-        elif "_random" in feature.iv.chrom:
-            continue
-        elif "chrUn_" in feature.iv.chrom:
-            continue
-
-        # transform feature to instance of Class MucorFeature
-        feat = MucorFeature(feature.attr[featureType], feature.type, feature.iv)
-        
-        # WARNING
-        # the following REQUIRES a coordinate-sorted GFF/GTF file
-        # extra checks incurring slowdown penalty are req'd if GFF/GTF not sorted
-        if feat.name in knownFeatures:
-            # In case there is an error in the GFF and/or the featureType (-f) is not unique,
-            # issue a warning
-            # for example, genes.gtf supplied with the Illumina igenomes package for the tuxedo tools suite
-            # includes duplicate entries for many genes -- e.g. DDX11L1 on chr15 shoudl be DDX11L9
-            # try to cope with this by relabeling subsequent genes as GENESYM.chrNN
-            if feat.iv.chrom != knownFeatures[feat.name].iv.chrom:
-                duplicateFeatures.add(feat.name)
-                feat.name = feat.name + '.' + feat.iv.chrom
-            else:
-                # do not obliterate the start coordinate when adding SUCCESSIVE bits of a feature (e.g. exons)
-                # TO DO: Here is where the --nounion option would work
-                #feat.iv.start = knownFeatures[feat.name].iv.start
-                pass # no-union - this does overwrite previous coordinates in knownFeatures,
-                     # but should not matter as the actual coordinates are obtaind from 'gas'.
-
-        # first, add to the knownFeatures, a dictionary of MucorFeatures, which contain the variants set
-        knownFeatures[feat.name] = feat
-        # then, add to the GenomicArrayOfSets, which we use to find gene symbol from variant coords
-        try:
-            gas[ feat.iv ] += feat.name
-        except ValueError:
-            print(feat.name)
-            print(feat.iv)
-            raise
-    '''
-    #pdb.set_trace()
     if duplicateFeatures:
         print("*** WARNING: {0} {1}'s found on more than one contig".format(len(duplicateFeatures), featureType))
 
@@ -358,23 +308,10 @@ def parse_MuTect(row, fieldId, header, fn, MuTect_Annotations):
         MuTect_output = fn.strip('_snpEff.vcf') + '.out'
         for line in open(MuTect_output):
             if str(str(row[0]) + "\t") in str(line) and str(str(position) + "\t") in str(line):
-            #try:
                 MuTect_Annotations[tuple((str(row[0]), position))] = line.split('\t')[8]
-                #pdb.set_trace()
                 break
-            #except:
             else:
-                #print(row)
-                #print(line)
-                #pdb.set_trace()
                 continue
-                #print(row[0])
-                #print(position) 
-                #print(line.split('\t'))
-                #continue
-
-            
-
     return VF, DP, position, MuTect_Annotations
 
 def parse_SomaticIndelDetector(row, fieldId, header):
@@ -403,7 +340,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
     # All variants stored in long (record) format
     # in a pandas dataframe
-    ###varDF = pd.DataFrame(columns=('chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source') )
     varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'datab':[],'sample':[],'source':[]}
 
     print("\n=== Reading Variant Files ===")
@@ -433,9 +369,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             elif str('SomaticIndelDetector') in str(row):
                 SomaticIndelDetector = True
             elif str('MuTect') in str(row):
-                Mutect = True     ## Assume that if not IonTorrent or MiSeq variant calls, must be mutect? 
-                #global MuTect_Annotations
-                #MuTect_Annotations = defaultdict(str)
+                Mutect = True
             row = varReader.next()
 
         header = row
@@ -470,7 +404,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
             EFF = ""
             muts = []
-            #annot = "NA"
             for eff in row[fieldId['INFO']].split(';'):
                 if eff.startswith('EFF='):
                     for j in eff.split(','):
@@ -523,14 +456,12 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             # add to variants data frame
             for key in vardata.keys():
                 varD[key].append(vardata[key])
-            ####varDF = varDF.append(vardata, ignore_index=True)
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
     # Clean up variant dataframe a little
     # position should be integer, not float
-    #pdb.set_trace()
     varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'])
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas, snps
