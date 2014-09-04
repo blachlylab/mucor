@@ -151,46 +151,7 @@ def in_dbsnp(snps, loc):
     return status
 ##################################
 
-def parseGffFile(gffFileName, featureType, fast):
-    '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
-    Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)'''
-    
-    # TO DO: command line flag should indicate that variants in INTRONS are counted
-    # This is called --union, see below
-    
-    startTime = time.clock()
-    print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
-    
-    scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
-    annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
-    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('.p')
-    if fast:
-        ## You have the NEED for SPEED
-        if os.path.exists( archiveFilePath ):
-            print("Opening annotation archive: " + str(archiveFilePath))
-            gffFile = pickle.load(open(archiveFilePath, 'rb'))
-        else:
-            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]))
-            print("   Reading in annotation and saving archive for faster future runs") 
-            gffFile = HTSeq.GFF_Reader(gffFileName)
-            archiveOut = open(archiveFilePath, 'wb')
-            pickle.dump(gffFile, archiveOut)
-    if not fast:
-        ## Slow and steady wins the race
-        gffFile = HTSeq.GFF_Reader(gffFileName)
-    
-    #ga = HTSeq.GenomicArray("auto", typecode="i")  # typecode i is integer
-    
-    knownFeatures = {}                              # empty dict
-
-    duplicateFeatures = set()
-
-    # gas - GenomicArrayOfSets.
-    # typecode always 'O' (object) for GenomicArrayOfSets
-    # UNstranded -- VCF and muTect output always report on + strand,
-    # but the GenomicArray must be unstranded because the GFF /is/ strand-specific,
-    # and if I manually coded all GenomicIntervals read from the VCF or muTect file as '+',
-    # then no genes on the - strand would have variants binned to them
+def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
 
     for feature in itertools.islice(gffFile, 0, None):
@@ -235,6 +196,108 @@ def parseGffFile(gffFileName, featureType, fast):
             print(feat.name)
             print(feat.iv)
             raise
+    return gas, knownFeatures, duplicateFeatures
+
+def parseGffFile(gffFileName, featureType, fast):
+    '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
+    Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)'''
+    
+    # TO DO: command line flag should indicate that variants in INTRONS are counted
+    # This is called --union, see below
+    
+    startTime = time.clock()
+    print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
+    
+    scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
+    annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
+    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('.p')
+    
+    gffFile = HTSeq.GFF_Reader(gffFileName)
+    
+    #ga = HTSeq.GenomicArray("auto", typecode="i")  # typecode i is integer
+    
+    knownFeatures = {}                              # empty dict
+
+    duplicateFeatures = set()
+
+    # gas - GenomicArrayOfSets.
+    # typecode always 'O' (object) for GenomicArrayOfSets
+    # UNstranded -- VCF and muTect output always report on + strand,
+    # but the GenomicArray must be unstranded because the GFF /is/ strand-specific,
+    # and if I manually coded all GenomicIntervals read from the VCF or muTect file as '+',
+    # then no genes on the - strand would have variants binned to them
+
+    if fast:
+        ## You have the NEED for SPEED
+        if os.path.exists( archiveFilePath ):
+            print("Opening annotation archive: " + str(archiveFilePath))
+            pAnnot = open(archiveFilePath, 'rb')
+            gas = pickle.load(pAnnot)
+            knownFeatures = pickle.load(pAnnot)
+            duplicateFeatures = pickle.load(pAnnot)
+            pAnnot.close()
+            #pdb.set_trace()
+        else:
+            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]))
+            print("   Reading in annotation and saving archive for faster future runs") 
+            gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
+            archiveOut = open(archiveFilePath, 'wb')
+            #pAnnot = [ gas, knownFeatures, duplicateFeatures ]
+            pickle.dump(gas, archiveOut)
+            pickle.dump(knownFeatures, archiveOut)
+            pickle.dump(duplicateFeatures, archiveOut)
+            archiveOut.close()
+            #pdb.set_trace()
+    if not fast:
+        ## Slow and steady wins the race
+        gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
+        #pdb.set_trace()
+    '''
+    gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
+
+    for feature in itertools.islice(gffFile, 0, None):
+        # Nonstandard contigs (eg chr17_ctg5_hap1, chr19_gl000209_random, chrUn_...)
+        # must be specifically excluded, otherwise you will end up with exception
+        # ValueError: start is larger than end due to duplicated gene symbols
+        if "_hap" in feature.iv.chrom:
+            continue
+        elif "_random" in feature.iv.chrom:
+            continue
+        elif "chrUn_" in feature.iv.chrom:
+            continue
+
+        # transform feature to instance of Class MucorFeature
+        feat = MucorFeature(feature.attr[featureType], feature.type, feature.iv)
+        
+        # WARNING
+        # the following REQUIRES a coordinate-sorted GFF/GTF file
+        # extra checks incurring slowdown penalty are req'd if GFF/GTF not sorted
+        if feat.name in knownFeatures:
+            # In case there is an error in the GFF and/or the featureType (-f) is not unique,
+            # issue a warning
+            # for example, genes.gtf supplied with the Illumina igenomes package for the tuxedo tools suite
+            # includes duplicate entries for many genes -- e.g. DDX11L1 on chr15 shoudl be DDX11L9
+            # try to cope with this by relabeling subsequent genes as GENESYM.chrNN
+            if feat.iv.chrom != knownFeatures[feat.name].iv.chrom:
+                duplicateFeatures.add(feat.name)
+                feat.name = feat.name + '.' + feat.iv.chrom
+            else:
+                # do not obliterate the start coordinate when adding SUCCESSIVE bits of a feature (e.g. exons)
+                # TO DO: Here is where the --nounion option would work
+                #feat.iv.start = knownFeatures[feat.name].iv.start
+                pass # no-union - this does overwrite previous coordinates in knownFeatures,
+                     # but should not matter as the actual coordinates are obtaind from 'gas'.
+
+        # first, add to the knownFeatures, a dictionary of MucorFeatures, which contain the variants set
+        knownFeatures[feat.name] = feat
+        # then, add to the GenomicArrayOfSets, which we use to find gene symbol from variant coords
+        try:
+            gas[ feat.iv ] += feat.name
+        except ValueError:
+            print(feat.name)
+            print(feat.iv)
+            raise
+    '''
     #pdb.set_trace()
     if duplicateFeatures:
         print("*** WARNING: {0} {1}'s found on more than one contig".format(len(duplicateFeatures), featureType))
@@ -433,7 +496,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-            if resultSet:                   # which I'll use as a key on the knownFeactures dict
+            if resultSet:                   # which I'll use as a key on the knownFeatures dict
                 #print var.pos              # and each feature with matching ID gets allocated the variant
                 #print(gas[ var.pos ])      # 
                 for featureName in resultSet:
