@@ -305,7 +305,7 @@ def parse_MuTect(row, fieldId, header, fn, MuTect_Annotations):
     global MuTect_switch
     MuTect_switch = True
     if MuTect_switch == True:
-        MuTect_output = fn.strip('_snpEff.vcf') + '.out'
+        MuTect_output = fn.replace('_snpEff.vcf', '.out')
         for line in open(MuTect_output):
             if str(str(row[0]) + "\t") in str(line) and str(str(position) + "\t") in str(line):
                 MuTect_Annotations[tuple((str(row[0]), position))] = line.split('\t')[8]
@@ -371,7 +371,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             elif str('MuTect') in str(row):
                 Mutect = True
             row = varReader.next()
-
+        
         header = row
         if len(header) == 0: raise ValueError('Invalid header')
         fieldId = dict(zip(header, range(0, len(header))))
