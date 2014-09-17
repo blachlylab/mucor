@@ -354,7 +354,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             row = varReader.next()
         except StopIteration:
             # a file was empty (i.e. no first row to read)
-            print("Empty file {}".format(fn)
+            print("Empty file {}".format(fn))
             continue    # next fn in variantFiles
         #if len(row) != 1: raise ValueError('Invalid muTector header')
         #if "## muTector" not in row[0]: raise ValueError('Invalid muTector header')
