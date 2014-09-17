@@ -241,9 +241,9 @@ def parseGffFile(gffFileName, featureType, fast):
             print("   Reading in annotation and saving archive for faster future runs") 
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
             archiveOut = open(archiveFilePath, 'wb')
-            pickle.dump(gas, archiveOut) ### pickle feature only works with full annotation files
-            pickle.dump(knownFeatures, archiveOut)
-            pickle.dump(duplicateFeatures, archiveOut)
+            pickle.dump(gas, archiveOut, -1) ### pickle feature only works with full annotation files
+            pickle.dump(knownFeatures, archiveOut, -1)
+            pickle.dump(duplicateFeatures, archiveOut, -1)
             archiveOut.close()
     if not fast:
 	# ignore pickles function
@@ -276,8 +276,7 @@ def parse_IonTorrent(row, fieldId, header):
         try:
             AO = sum(tempval2)
         except:
-            print("what's up with this? " + str(tempval2) )
-            sys.exit(1)
+            abortWithMessage("AO should be an int, or a list of ints: AO = {0}/".format(tempval2))
     else:
         AO = tempval
     VF = float(float(AO)/float(float(RO) + float(AO)))
@@ -340,7 +339,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
 
     # All variants stored in long (record) format
     # in a pandas dataframe
-    varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'datab':[],'sample':[],'source':[]}
+    varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
@@ -408,14 +407,20 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             # TO DO: change row index#s to column names or transition to row object
 
             EFF = ""
+            FC = ""
             muts = []
+            loca = []
             for eff in row[fieldId['INFO']].split(';'):
                 if eff.startswith('EFF='):
                     for j in eff.split(','):
                         muts.append(str(j.split('|')[3]))
+                        loca.append(str(j.split('(')[0]).strip('EFF='))
             for guy in set(muts):
                 if str(guy) != "":
                     EFF += str(guy) + ";"
+            for guy in set(loca):
+                if str(guy) != "":
+                    FC += str(guy) + ";"
 
             if MiSeq:
                 VF, DP, position = parse_MiSeq(row, fieldId, header)
@@ -429,7 +434,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             else:
                 print("This isn't MiSeq, IonTorrent, SomaticIndelDetector, or Mutect data?")
                 sys.exit(1)
-            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'))
+            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
             ###########################################
 
             # find bin for variant location
@@ -449,6 +454,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             dp = DP     # to do, change (karl capitalizes)
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             effect = EFF
+            fc = FC
             sample = fn.split('/')[-1]      # to do, will need to come from JSON config
             source = fn.split('/')[-1]
             datab = str('?')
@@ -456,8 +462,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
                 datab = MuTect_Annotations[(chr, pos)]
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
-            vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'], \
-                                [ chr , pos , ref , alt , vf , dp , feature , effect , datab , sample , source ])) 
+            vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
+                                [ chr , pos , ref , alt , vf , dp , feature , effect , fc , datab , sample , source ])) 
             # add to variants data frame
             for key in vardata.keys():
                 varD[key].append(vardata[key])
@@ -465,9 +471,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
+    # Removing columns from the following 'columns' list will mask them from output in allvars.txt
+    varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'])
     # Clean up variant dataframe a little
     # position should be integer, not float
-    varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','datab','sample','source'])
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas, snps
 
@@ -538,7 +545,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
     # =========================================================
     # variant_details.txt
     #
-    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tEffect\tSource\t') ######## Karl Modified ##############
+    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tEffect\tFC\tSource\t') ######## Karl Modified ##############
     if MuTect_switch:
         ofVariantDetails.write('Annotation\tCount\n')
     elif not MuTect_switch:
@@ -559,6 +566,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                     ofVariantDetails.write(var.frac + '\t')
                     ofVariantDetails.write(var.dp + '\t')
                     ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).strip(']').strip('[').strip("'") + '\t')
+                    ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).strip(']').strip('[').strip("'") + '\t')
                     ofVariantDetails.write(var.source + '\t')
                     if MuTect_switch:
                         ofVariantDetails.write(MuTect_Annotations[(var.pos.chrom, var.pos.pos)] + '\t')
@@ -602,13 +610,13 @@ def main(argv):
 
     if not os.path.exists(args.gff):
         abortWithMessage("Could not find GFF file {0}".format(args.gff))
-    if os.path.exists(args.output):
-        abortWithMessage("The directory {0} already exists. Will not overwrite.".format(args.output))
-    else:
+    if os.path.exists(args.output) and os.listdir(args.output):
+        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output))
+    elif not os.path.exists(args.output):
         try:
             os.makedirs(args.output)
         except:
-            abortWithMessage("Error when creating output directory {0}".format(outputDirName))
+            abortWithMessage("Error when creating output directory {0}".format(args.output))
 
     # check that all specified variant files exist
     for fn in args.variantfiles:
