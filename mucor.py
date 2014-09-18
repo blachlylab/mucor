@@ -199,6 +199,24 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
             raise
     return gas, knownFeatures, duplicateFeatures
 
+def parseJSON(json_config):
+    JD = json.load(open(json_config,'r'))
+    featureType = JD['feature']
+    outputDir = JD['run_name']
+    union = JD['union']
+    fast = JD['fast']
+    gff = JD['gtf']
+    filters = defaultdict(bool)
+    for i in JD['filters']:
+        filters[i] = True      # Imagine filters as "ON/OFF", binary switches
+    input_files = []
+    for i in JD['samples']:
+        for j in i['files']:
+            if str(j['type']) == str("vcf") and bool(j['snpeff']) == bool(True): # Currently only support snpEff annotated VCF files
+                input_files.append(j['path'])
+
+    return featureType, outputDir, union, fast, gff, filters, input_files
+
 def parseGffFile(gffFileName, featureType, fast):
     '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
     Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)'''
@@ -414,7 +432,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
                 if eff.startswith('EFF='):
                     for j in eff.split(','):
                         muts.append(str(j.split('|')[3]))
-                        loca.append(str(j.split('(')[0]).strip('EFF='))
+                        loca.append(str(j.split('(')[0]).replace('EFF=',''))
             for guy in set(muts):
                 if str(guy) != "":
                     EFF += str(guy) + ";"
@@ -579,7 +597,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
     return 0
 
 
-def main(argv):
+def main():
     print(Info.logo)
     print(Info.versionInfo)
 
@@ -587,6 +605,7 @@ def main(argv):
     print("\t{0}".format(time.ctime() ) )
     print()
 
+    '''
     parser = argparse.ArgumentParser(description=Info.description, epilog=Info.epilog, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
@@ -607,31 +626,33 @@ def main(argv):
     parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
     
     args = parser.parse_args()
+    fast = args.no_archive
+    '''
+    featureType, outputDir, union, fast, gff, filters, input_files = parseJSON(sys.argv[1])
 
-    if not os.path.exists(args.gff):
-        abortWithMessage("Could not find GFF file {0}".format(args.gff))
-    if os.path.exists(args.output) and os.listdir(args.output):
-        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output))
-    elif not os.path.exists(args.output):
+    if not os.path.exists(gff):
+        abortWithMessage("Could not find GFF file {0}".format(gff))
+    if os.path.exists(outputDir) and os.listdir(outputDir):
+        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(outputDir))
+    elif not os.path.exists(outputDir):
         try:
-            os.makedirs(args.output)
+            os.makedirs(outputDir)
         except:
-            abortWithMessage("Error when creating output directory {0}".format(args.output))
+            abortWithMessage("Error when creating output directory {0}".format(outputDir))
 
     # check that all specified variant files exist
-    for fn in args.variantfiles:
+    for fn in input_files:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
 
-    fast = args.no_archive
 
-    knownFeatures, gas = parseGffFile(args.gff, args.featuretype, fast)
+    knownFeatures, gas = parseGffFile(gff, featureType, fast)
 
     snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
 
-    varDF, knownFeatures, gas, snps = parseVariantFiles(args.variantfiles, knownFeatures, gas, snps)
+    varDF, knownFeatures, gas, snps = parseVariantFiles(input_files, knownFeatures, gas, snps)
     
-    printOutput(argv, args.output, knownFeatures, gas, snps) ######## Karl Modified ##############
+    printOutput(input_files, outputDir, knownFeatures, gas, snps) ######## Karl Modified ##############
     
     ## ## ##
     # print record format (long format) all variants data frame
@@ -646,7 +667,7 @@ def main(argv):
     # so we will sort by feature (gene etc.) then position
     varDF.sort(columns=['feature','pos'], inplace=True)
     varDF.replace('', np.nan, inplace=True)
-    varDF.to_csv(args.output + '/allvars.txt', sep='\t', na_rep='?', index=False)
+    varDF.to_csv(outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
     
     # pretty print newline before exit
     print()
@@ -655,4 +676,4 @@ def main(argv):
 if __name__ == "__main__":
     if sys.hexversion < 0x02070000:
         raise RuntimeWarning("mucor should be run on python 2.7.0 or greater.")
-    main(sys.argv[1:])
+    main()
