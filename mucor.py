@@ -605,29 +605,6 @@ def main():
     print("\t{0}".format(time.ctime() ) )
     print()
 
-    '''
-    parser = argparse.ArgumentParser(description=Info.description, epilog=Info.epilog, formatter_class=argparse.RawDescriptionHelpFormatter)
-
-    parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
-    parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
-    parser.add_argument("-u", "--union", action="store_true", help="""
-        Join all items with same ID for feature_type (specified by -f)
-        into a single, continuous bin. For example, if you want intronic
-        variants counted with a gene, use this option. 
-        ** TO DO **
-        WARNING, this will likely lead to spurious results due to things
-        like MIR4283-2 which exists twice on + and - strand of the same
-        chromosome over 1 megabase apart. This creates one huge spurious
-        bin.
-        """)
-    
-    parser.add_argument("-o", "--output", required=True, help="Output directory name")
-    parser.add_argument("variantfiles", nargs='+', help="List of variant files to muCorrelate")
-    parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
-    
-    args = parser.parse_args()
-    fast = args.no_archive
-    '''
     featureType, outputDir, union, fast, gff, filters, input_files = parseJSON(sys.argv[1])
 
     if not os.path.exists(gff):
