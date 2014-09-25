@@ -26,8 +26,14 @@ def DetectDataType(fn):
 		elif str('SomaticIndelDetector') in str(row):
 			return "SomaticIndelDetector"
 			break
-		elif str('MuTect') in str(row):
+		elif str('MuTect') in str(row) or str('muTector') in str(row):
 			return "Mutect"
+			break
+		elif str('samtools') in str(row):
+			return "Samtools"
+			break
+		elif str('source=VarScan') in str(row):
+			return "VarScan"
 			break
 		row = varReader.next()
 	return "Unknown"
@@ -42,6 +48,29 @@ def DetectSnpEffStatus(fn):
 			break
 		row = varReader.next()
 	return False
+
+### TODO: snpEff trump detection? Ex: prefer a snp annotated version of a sample's output files
+
+def filterFileList(json_dict_row):
+	annotated_vcf = 3
+	unannotated_vcf = 2
+	mutect_output = 1
+	status = defaultdict(dict)
+	sid = json_dict_row['id']
+	sources = []
+	for i in json_dict_row['files']:
+		if str(i['source']) not in sources:
+			sources.append(str(i['source']))
+
+	for i in json_dict_row['files']:
+		if i['type'] == str('vcf') :
+			if i['snpeff'] == bool(True) and annotated_vcf > status[i['source']][sid]:
+				status[i['source']][sid] = annotated_vcf
+			elif i['snpeff'] == bool(False) and unannotated_vcf > status[i['source']][sid]:
+				status[i['source']][sid] = unannotated_vcf
+		if i['type'] == str('mutect') and mutect_output > status[i['source']][sid]:
+			mstatus[i['source']][sid] = mutect_output
+	return status
 
 def thing(args, proj_dir):
 	json_dict = defaultdict()
@@ -62,12 +91,12 @@ def thing(args, proj_dir):
 			something['files'] = list()
 			for root, dirs, files in os.walk(proj_dir):
 				for i in files:
-					if str(sid) in str(i):
+					if str(sid) in str(i): # be careful with sample names here. "U-24" will catch "U-240" etc. 
 						full_path = os.path.join(root, i)
 						if str(i).split('.')[-1] == str("vcf"):
-							something['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path)})
+							something['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':DetectDataType(full_path)} )
 						elif str(i).split('.')[-1] == str("out"):
-							something['files'].append({'type':'mutect', 'path':str(full_path)})
+							something['files'].append({'type':'mutect', 'path':str(full_path), 'source':DetectDataType(full_path)} )
 						else:
 							print("unsure of what to do with " + str(full_path))
 		json_dict['samples'].append(something)
@@ -97,16 +126,6 @@ def main():
 
 	if not os.path.exists(args.gff):
 	    abortWithMessage("Could not find GFF file {0}".format(args.gff))
-	    '''
-	if os.path.exists(args.output):
-		pass
-	    #abortWithMessage("The directory {0} already exists. Will not overwrite.".format(args.output))
-	else:
-	    try:
-	        os.makedirs(args.output)
-	    except:
-	        abortWithMessage("Error when creating output directory {0}".format(outputDirName))
-	        '''
 	if not args.project_directory or not os.path.exists(args.project_directory):
 		print("Project directory not found; using CWD")
 		proj_dir = cwd
@@ -114,7 +133,6 @@ def main():
 		proj_dir = args.project_directory
 
 	json_dict = thing(args, proj_dir)
-	#pdb.set_trace()
 	if os.path.exists(args.json_config_output):
 		abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
 	output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")

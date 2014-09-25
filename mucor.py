@@ -154,7 +154,6 @@ def in_dbsnp(snps, loc):
 # new, separate function to construct the genomic array of sets
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
-
     for feature in itertools.islice(gffFile, 0, None):
         # Nonstandard contigs (eg chr17_ctg5_hap1, chr19_gl000209_random, chrUn_...)
         # must be specifically excluded, otherwise you will end up with exception
@@ -200,6 +199,8 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     return gas, knownFeatures, duplicateFeatures
 
 def parseJSON(json_config):
+    global filename2samples
+    filename2samples = {}
     JD = json.load(open(json_config,'r'))
     featureType = JD['feature']
     outputDir = JD['run_name']
@@ -207,13 +208,22 @@ def parseJSON(json_config):
     fast = JD['fast']
     gff = JD['gtf']
     filters = defaultdict(bool)
+    global MuTect_switch
+    MuTect_switch = False
+    global SnpEff_switch
+    SnpEff_switch = False
     for i in JD['filters']:
         filters[i] = True      # Imagine filters as "ON/OFF", binary switches
     input_files = []
     for i in JD['samples']:
         for j in i['files']:
-            if str(j['type']) == str("vcf") and bool(j['snpeff']) == bool(True): # Currently only support snpEff annotated VCF files
-                input_files.append(j['path'])
+            filename = str(j['path']).split('/')[-1]
+            filename2samples[filename] = i['id']
+            if not MuTect_switch and str(j['source']) == str('Mutect') and str(j['type']) == str('mutect'):
+                MuTect_switch = bool(True)
+            if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
+                SnpEff_switch = bool(True)
+            input_files.append(j['path'])
 
     return featureType, outputDir, union, fast, gff, filters, input_files
 
@@ -229,10 +239,9 @@ def parseGffFile(gffFileName, featureType, fast):
     
     scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
     annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
-    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('.p')
-    
+    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
+    print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
-    
     #ga = HTSeq.GenomicArray("auto", typecode="i")  # typecode i is integer
     
     knownFeatures = {}                              # empty dict
@@ -255,7 +264,7 @@ def parseGffFile(gffFileName, featureType, fast):
             duplicateFeatures = pickle.load(pAnnot)
             pAnnot.close()
         else:
-            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]))
+            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType))
             print("   Reading in annotation and saving archive for faster future runs") 
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
             archiveOut = open(archiveFilePath, 'wb')
@@ -306,10 +315,18 @@ def parse_IonTorrent(row, fieldId, header):
             break
     return VF, DP, position
 
-def parse_MuTect(row, fieldId, header, fn, MuTect_Annotations):
+def parse_MuTectOUT(row, fieldId, MuTect_Annotations):
+    VF = row[fieldId['tumor_f']]
+    DP = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
+    position = int(row[fieldId['position']])
+    MuTect_Annotations[tuple(( str(row[0]), position) )] = row[fieldId['dbsnp_site']]
+
+    return VF, DP, position, MuTect_Annotations 
+    
+def parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations):
     j = 0
     for i in header:
-        if str('-') in str(i):
+        if str('-') in str(i): # This line should detect if the sample id is in the line. Should be rewritten for samples without a "-" in their name
             tmpsampID = i
     for i in row[fieldId['FORMAT']].split(':'):
         if i == "FA":
@@ -318,10 +335,11 @@ def parse_MuTect(row, fieldId, header, fn, MuTect_Annotations):
             DP = row[fieldId[tmpsampID]].split(':')[j]
         j+=1
     position = int(row[fieldId['POS']])
-
+    '''
     global MuTect_switch
     MuTect_switch = True
-    if MuTect_switch == True:
+    '''
+    if MuTect_switch == True and os.path.exists(fn.replace('_snpEff.vcf', '.out')) and str(fn.replace('_snpEff.vcf', '.out')) != str(fn):
         MuTect_output = fn.replace('_snpEff.vcf', '.out')
         for line in open(MuTect_output):
             if str(str(row[0]) + "\t") in str(line) and str(str(position) + "\t") in str(line):
@@ -346,6 +364,27 @@ def parse_SomaticIndelDetector(row, fieldId, header):
     position = int(row[fieldId['POS']])
     return VF, DP, position
 
+def parse_SamTools(row, fieldId, header):
+    position = int(row[fieldId['POS']])
+    for i in row[fieldId['INFO']].split(';'):
+        if i.startswith("DP4="):
+            j = i.split('=')[1].split(',')
+            ref = int(int(j[0]) + int(j[1]))
+            alt = int(int(j[2]) + int(j[3]))
+            DP = int(int(ref) + int(alt))
+            VF = float( float(alt)/float(DP) )
+    return VF, DP, position
+
+def parse_VarScan(row, fieldId, header):
+    j = 0
+    position = int(row[fieldId['POS']])
+    for i in row[fieldId['FORMAT']].split(':'):
+        if str(i) == "DP":
+            DP = int(row[fieldId[header[-1]]].split(':')[j])
+        if str(i) == "FREQ":
+            VF = float(float(str(row[fieldId[header[-1]]].split(':')[j]).strip('%'))/float(100))
+        j += 1
+    return VF, DP, position
 
 def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
     # parse the variant files (muTect format)
@@ -381,8 +420,14 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
         IonTorrent = False
         global Mutect
         Mutect = False
+        global Mutector
+        Mutector = False
         global SomaticIndelDetector
         SomaticIndelDetector = False
+        global Samtools
+        Samtools = False
+        global VarScan 
+        VarScan = False
         while str(row).split("'")[1][0:2] == '##':
             if str('Torrent Unified Variant Caller') in str(row): 
                 IonTorrent = True
@@ -392,6 +437,12 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
                 SomaticIndelDetector = True
             elif str('MuTect') in str(row):
                 Mutect = True
+            elif str('muTector') in str(row):
+                Mutector = True
+            elif str('samtools') in str(row):
+                Samtools = True
+            elif str('source=VarScan') in str(row):
+                VarScan = True
             row = varReader.next()
         
         header = row
@@ -410,7 +461,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             ## FILTERS ##   
             #############
             #if row[fieldId['FILTER']] != 'PASS': continue
-            if row[fieldId['FILTER']] == 'REJECT': continue
+            try:
+                if row[fieldId['FILTER']] == 'REJECT': continue      ## VCF file format
+            except KeyError:
+                if row[fieldId['judgement']] == 'REJECT': continue   ## MuTect '.out' file format
             '''
             if MiSeq and str(row[fieldId['ID']])[0:2] == 'rs': 
                 chrom = str(row[fieldId['#CHROM']])
@@ -428,29 +482,36 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             FC = ""
             muts = []
             loca = []
-            for eff in row[fieldId['INFO']].split(';'):
-                if eff.startswith('EFF='):
-                    for j in eff.split(','):
-                        muts.append(str(j.split('|')[3]))
-                        loca.append(str(j.split('(')[0]).replace('EFF=',''))
-            for guy in set(muts):
-                if str(guy) != "":
-                    EFF += str(guy) + ";"
-            for guy in set(loca):
-                if str(guy) != "":
-                    FC += str(guy) + ";"
-
+            try:
+                for eff in row[fieldId['INFO']].split(';'):
+                    if eff.startswith('EFF='):
+                        for j in eff.split(','):
+                            muts.append(str(j.split('|')[3]))
+                            loca.append(str(j.split('(')[0]).replace('EFF=',''))
+                for guy in set(muts):
+                    if str(guy) != "":
+                        EFF += str(guy) + ";"
+                for guy in set(loca):
+                    if str(guy) != "":
+                        FC += str(guy) + ";"
+            except KeyError:
+                pass
             if MiSeq:
                 VF, DP, position = parse_MiSeq(row, fieldId, header)
             elif IonTorrent:
                 VF, DP, position = parse_IonTorrent(row, fieldId, header)
             elif Mutect:
-                VF, DP, position, MuTect_Annotations = parse_MuTect(row, fieldId, header, fn, MuTect_Annotations)
+                VF, DP, position, MuTect_Annotations = parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations)
             elif SomaticIndelDetector:
                 VF, DP, position = parse_SomaticIndelDetector(row, fieldId, header)
-
+            elif Mutector:
+                VF, DP, position, MuTect_Annotations = parse_MuTectOUT(row, fieldId, MuTect_Annotations)
+            elif Samtools:
+                VF, DP, position = parse_SamTools(row, fieldId, header)
+            elif VarScan:
+                VF, DP, position = parse_VarScan(row, fieldId, header)
             else:
-                print("This isn't MiSeq, IonTorrent, SomaticIndelDetector, or Mutect data?")
+                print("This isn't MiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, or Mutect data?")
                 sys.exit(1)
             var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
             ###########################################
@@ -473,10 +534,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             effect = EFF
             fc = FC
-            sample = fn.split('/')[-1]      # to do, will need to come from JSON config
+            #sample = fn.split('/')[-1]      # to do, will need to come from JSON config
+            sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
             datab = str('?')
-            if Mutect:
+            if Mutect or Mutector:
                 datab = MuTect_Annotations[(chr, pos)]
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
@@ -563,11 +625,13 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
     # =========================================================
     # variant_details.txt
     #
-    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tEffect\tFC\tSource\t') ######## Karl Modified ##############
+    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tSource\t') ######## Karl Modified ##############
+    if SnpEff_switch:
+        ofVariantDetails.write('Effect\tFC\t')
     if MuTect_switch:
-        ofVariantDetails.write('Annotation\tCount\n')
-    elif not MuTect_switch:
-        ofVariantDetails.write('Count\n')
+        ofVariantDetails.write('Annotation\t')
+    ofVariantDetails.write('Count\n')
+
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
@@ -583,11 +647,22 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                     ofVariantDetails.write(var.alt + '\t')
                     ofVariantDetails.write(var.frac + '\t')
                     ofVariantDetails.write(var.dp + '\t')
-                    ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).strip(']').strip('[').strip("'") + '\t')
-                    ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).strip(']').strip('[').strip("'") + '\t')
                     ofVariantDetails.write(var.source + '\t')
+                    if SnpEff_switch:
+                        if str(var.eff) != str(''):
+                            #pdb.set_trace()
+                            ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                        else:
+                            ofVariantDetails.write(str('?') + '\t')
+                        if str(var.fc) != str(''):
+                            ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                        else:
+                            ofVariantDetails.write(str('?') + '\t')
                     if MuTect_switch:
-                        ofVariantDetails.write(MuTect_Annotations[(var.pos.chrom, var.pos.pos)] + '\t')
+                        if str(MuTect_Annotations[(var.pos.chrom, var.pos.pos)]) != str(''):
+                            ofVariantDetails.write(MuTect_Annotations[(var.pos.chrom, var.pos.pos)] + '\t')
+                        else:
+                            ofVariantDetails.write(str('?') + '\t')
                     ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
                     ofVariantBeds.write('\n')
         ########### Karl added bed file output here #############
@@ -623,13 +698,12 @@ def main():
             abortWithMessage("Could not find variant file: {0}".format(fn))
 
 
-    knownFeatures, gas = parseGffFile(gff, featureType, fast)
+    knownFeatures, gas = parseGffFile(str(gff), str(featureType), bool(fast))
 
     snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
 
-    varDF, knownFeatures, gas, snps = parseVariantFiles(input_files, knownFeatures, gas, snps)
-    
-    printOutput(input_files, outputDir, knownFeatures, gas, snps) ######## Karl Modified ##############
+    varDF, knownFeatures, gas, snps = parseVariantFiles(list(input_files), knownFeatures, gas, snps)
+    printOutput(list(input_files), str(outputDir), knownFeatures, gas, snps) ######## Karl Modified ##############
     
     ## ## ##
     # print record format (long format) all variants data frame
