@@ -31,6 +31,7 @@ import pandas as pd
 import mucorfilters as mf
 from variant import Variant
 from mucorfeature import MucorFeature
+import output
 
 class Info:
     '''Program info: logo, version, and usage'''
@@ -717,10 +718,17 @@ def main():
     
     # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
     # so we will sort by feature (gene etc.) then position
-    varDF.sort(columns=['feature','pos'], inplace=True)
-    varDF.replace('', np.nan, inplace=True)
-    varDF.to_csv(outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
+    ##varDF.sort(columns=['feature','pos'], inplace=True)
+    ##varDF.replace('', np.nan, inplace=True)
+    ##varDF.to_csv(outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
     
+    # FUTURE: all output taken care of with below
+    # ow = output.writer()
+    # for format in config.output_formats
+    #   ow.write(df, format, config.output_dir) #<-output_dir or whtever, double check
+    ow = output.writer()
+    ow.write(varDF, "long", outputDir)
+
     # pretty print newline before exit
     print()
 
