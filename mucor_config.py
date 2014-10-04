@@ -88,6 +88,7 @@ def thing(args, proj_dir):
 	json_dict['fast'] = bool(args.no_archive)
 	json_dict['feature'] = str(args.featuretype)
 	json_dict['filters'] = ['MUTECT-KEEP', 'VCF-PASS']
+    json_dict['output'] = ['default']   # future: xls, vcf, gvf
 	json_dict['samples'] = list(dict())
 	for id in open(args.samples):
 		sid = id.strip()
