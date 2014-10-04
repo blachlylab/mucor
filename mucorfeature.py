@@ -49,6 +49,7 @@ class MucorFeature(HTSeq.GenomicFeature):
 			frac = ""   ######## Karl Added ##############
 			dp = ""     ######## Karl Added ##############
 			eff = ""
+			fc = ""
 			#annot = ""
 			for varClass in self.variants:
 				if (varClass.pos.chrom, varClass.pos.pos, varClass.ref, varClass.alt) == uniqueVarTup:
@@ -56,9 +57,10 @@ class MucorFeature(HTSeq.GenomicFeature):
 					frac += str(varClass.frac) + ", "   ######## Karl Added ##############
 					dp += str(varClass.dp) + ", "       ######## Karl Added ##############
 					eff += str(varClass.eff) + ", "     ######## Karl Added ##############
+					fc += str(varClass.fc) + ", "
 					#annot += str(varClass.annot) + ", " ######## Karl Added ##############
 			pos = HTSeq.GenomicPosition(uniqueVarTup[0], uniqueVarTup[1] )
-			uniqueVar = Variant(source.strip(", "), pos, ref=uniqueVarTup[2], alt=uniqueVarTup[3], frac=str(frac).strip(", "), dp=str(dp).strip(", "), eff=str(eff).strip(", ")) ######## Karl Modified ##############
+			uniqueVar = Variant(source.strip(", "), pos, ref=uniqueVarTup[2], alt=uniqueVarTup[3], frac=str(frac).strip(", "), dp=str(dp).strip(", "), eff=str(eff).strip(", "), fc=str(fc).strip(", ")) ######## Karl Modified ##############
 			uniqueVariants.add(uniqueVar)
 
 		return uniqueVariants
