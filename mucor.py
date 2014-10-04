@@ -274,7 +274,7 @@ def parseGffFile(gffFileName, featureType, fast):
             pickle.dump(duplicateFeatures, archiveOut, -1)
             archiveOut.close()
     if not fast:
-	# ignore pickles function
+    # ignore pickles function
         gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
 
     if duplicateFeatures:
