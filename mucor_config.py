@@ -1,3 +1,11 @@
+#!/bin/env python
+#-*- coding: utf8
+#
+# mucor_config.py
+#
+# Karl Kroll
+# James S Blachly
+
 import os
 import argparse
 from collections import defaultdict
