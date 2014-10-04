@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8
 #
 # mucor.py
 # (c) James S Blachly, MD 2013
