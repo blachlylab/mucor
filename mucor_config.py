@@ -14,6 +14,9 @@ import json
 import pdb
 import codecs
 
+# mucor modules
+from config import Config
+
 cwd = os.getcwd()
 
 def abortWithMessage(message, help = False):
@@ -81,6 +84,7 @@ def filterFileList(json_dict_row):
     return status
 
 def thing(args, proj_dir):
+    # TO DO : Pull these dictionary values from the 'Config' class variables for consistency
     json_dict = defaultdict()
     json_dict['run_name'] = str(args.output_directory).split('/')[-1]
     json_dict['gtf'] = str(args.gff)
@@ -88,7 +92,7 @@ def thing(args, proj_dir):
     json_dict['fast'] = bool(args.no_archive)
     json_dict['feature'] = str(args.featuretype)
     json_dict['filters'] = ['MUTECT-KEEP', 'VCF-PASS']
-    json_dict['output_formats'] = ['default']   # future: xls, vcf, gvf
+    json_dict['output_formats'] = ['default', 'long']   # future: xls, vcf, gvf
     json_dict['samples'] = list(dict())
     for id in open(args.samples):
         sid = id.strip()

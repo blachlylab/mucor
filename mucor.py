@@ -32,6 +32,7 @@ import mucorfilters as mf
 from variant import Variant
 from mucorfeature import MucorFeature
 import output
+from config import Config
 
 class Info:
     '''Program info: logo, version, and usage'''
@@ -201,11 +202,15 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     return gas, knownFeatures, duplicateFeatures
 
 def parseJSON(json_config):
+    """"""
+    
+    config = Config()
+
     global filename2samples
     filename2samples = {}
     JD = json.load(open(json_config,'r'))
     featureType = JD['feature']
-    outputDir = JD['run_name']
+    outputDir = JD['run_name']  # TO DO: we need consistency between code and config file
     union = JD['union']
     fast = JD['fast']
     gff = JD['gtf']
@@ -226,8 +231,16 @@ def parseJSON(json_config):
             if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
                 SnpEff_switch = bool(True)
             input_files.append(j['path'])
+    
+    config.feature = featureType
+    config.output_dir = outputDir
+    config.union = union
+    config.fast = fast
+    config.gff = gff
+    config.filters = filters
+    config.input_files = input_files
 
-    return featureType, outputDir, union, fast, gff, filters, input_files
+    return featureType, outputDir, union, fast, gff, filters, input_files, config
 
 def parseGffFile(gffFileName, featureType, fast):
     '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
@@ -682,7 +695,7 @@ def main():
     print("\t{0}".format(time.ctime() ) )
     print()
 
-    featureType, outputDir, union, fast, gff, filters, input_files = parseJSON(sys.argv[1])
+    featureType, outputDir, union, fast, gff, filters, input_files, config = parseJSON(sys.argv[1])
 
     if not os.path.exists(gff):
         abortWithMessage("Could not find GFF file {0}".format(gff))
