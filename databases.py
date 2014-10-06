@@ -84,11 +84,11 @@ def load_db(dbs):
 		if not str_to_bool(db):
 			pass
 		else:
-			print str(db)
 			print("\n=== Reading db file {0} ===".format(db))
 			parseDB(db, snps, duplicateAnnots)
-			totalTime = time.clock() - startTime
-			print("{0} sec\t{1} SNPs".format(int(totalTime), len(snps.values())))
+	totalTime = time.clock() - startTime
+	if str_to_bool(db):
+		print("{0} sec\t{1} SNPs".format(int(totalTime), len(snps.values())))
 	if duplicateAnnots:
 		print("*** WARNING: {0} mutations have identical positions, but different REF/ALTs".format(len(duplicateAnnots)))
 	return snps
@@ -100,7 +100,7 @@ def load_db(dbs):
 # (tuple of chrom,position) is in the dbSNP dictionary. 
 # must use defaultdict above to avoid key errors here
 def isAnnotatedSNP(snps, loc):
-	if snps.has_key(loc):
+	if snps.has_key(tuple(loc)):
 		return bool(True)
 	elif not snps.has_key(loc):
 		return bool(False)

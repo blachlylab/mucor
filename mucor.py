@@ -177,13 +177,15 @@ def parseJSON(json_config):
     fast = JD['fast']
     gff = JD['gtf']
     database = JD['database']
-    filters = defaultdict(bool)
+    filters = JD['filters']
     global database_switch
     database_switch = str_to_bool(database[0])
     global SnpEff_switch
     SnpEff_switch = False
+    '''
     for i in JD['filters']:
         filters[i] = True      # Imagine filters as "ON/OFF", binary switches
+    '''
     input_files = []
     for i in JD['samples']:
         for j in i['files']:
@@ -250,7 +252,7 @@ def parseGffFile(gffFileName, featureType, fast):
         gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
 
     if duplicateFeatures:
-        print("*** WARNING: {0} {1}'s found on more than one contig".format(len(duplicateFeatures), featureType))
+        print("*** WARNING: {0} {1}s found on more than one contig".format(len(duplicateFeatures), featureType))
 
     totalTime = time.clock() - startTime
     print("{0} sec\t{1} found:\t{2}".format(int(totalTime), featureType, len(knownFeatures)))
@@ -363,7 +365,20 @@ def parse_VarScan(row, fieldId, header):
         j += 1
     return VF, DP, position
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
+def filterRow(row, fieldId, filters):
+    try:
+        for rowFilter in str(row[fieldId['FILTER']]).split(';'):
+            if rowFilter not in filters:           ## VCF file format
+                return True
+                break
+    except KeyError:
+        for rowFilter in str(row[fieldId['judgement']]).split(';'):
+            if rowFilter not in filters:        ## MuTect '.out' file format
+                return True
+                break
+    return False
+
+def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
     # parse the variant files (muTect format)
     # TO DO: also interpret from VCF
 
@@ -440,10 +455,14 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             ## FILTERS ##   
             #############
             #if row[fieldId['FILTER']] != 'PASS': continue
+            if filterRow(row, fieldId, filters):
+                continue
+            '''
             try:
                 if row[fieldId['FILTER']] == 'REJECT': continue      ## VCF file format
             except KeyError:
                 if row[fieldId['judgement']] == 'REJECT': continue   ## MuTect '.out' file format
+            '''
             '''
             if MiSeq and str(row[fieldId['ID']])[0:2] == 'rs': 
                 chrom = str(row[fieldId['#CHROM']])
@@ -619,7 +638,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
-                pdb.set_trace()
+                
                 #if not isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
                 ofVariantDetails.write(feature.name + '\t')
                 ofVariantDetails.write(var.pos.chrom + '\t')
@@ -644,7 +663,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                     else:
                         ofVariantDetails.write(str('?') + '\t')
                 if database_switch:
-                    if isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):
+                    if isAnnotatedSNP(snps, tuple((str(var.pos.chrom),str(var.pos.pos)))):
                         ofVariantDetails.write(var.datab + '\t') # snps[(var.pos.chrom, var.pos.pos)].rs
                     else:
                         ofVariantDetails.write(str('?') + '\t')
@@ -686,7 +705,13 @@ def main():
     knownFeatures, gas = parseGffFile(str(gff), str(featureType), bool(fast))
 
     snps =  load_db(database) ######## Karl Modified ##############
-    varDF, knownFeatures, gas, snps = parseVariantFiles(list(input_files), knownFeatures, gas, snps)
+    '''
+    outsnps = open('outsnps.p','rb')
+    pickle.dump(snps,outsnps)
+    outsnps.close()
+    abortWithMessage("done making snps dict")
+    '''
+    varDF, knownFeatures, gas, snps = parseVariantFiles(list(input_files), knownFeatures, gas, snps, filters)
     printOutput(list(input_files), str(outputDir), knownFeatures, gas, snps) ######## Karl Modified ##############
     
     ## ## ##

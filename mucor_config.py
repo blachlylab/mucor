@@ -85,9 +85,15 @@ def thing(args, proj_dir):
 	json_dict['union'] = bool(args.union)
 	json_dict['fast'] = bool(args.no_archive)
 	json_dict['feature'] = str(args.featuretype)
-	json_dict['filters'] = ['MUTECT-KEEP', 'VCF-PASS']
 	json_dict['samples'] = list(dict())
-	json_dict['database'] = str(args.database).split(',')
+	outFilters = set(["PASS"])
+	for i in str(args.vcf_filters).split(','):
+		if i:
+			outFilters.add(i)
+	json_dict['filters'] = [x for x in outFilters]
+	json_dict['database'] = []
+	for i in str(args.database).split(','):
+		json_dict['database'].append(os.path.expanduser(i))
 	for id in open(args.samples):
 		sid = id.strip()
 		if str(sid) == "":
@@ -116,6 +122,7 @@ def main():
 	parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names")
 	parser.add_argument("-d", "--project_directory", required=False, help="Project root directory, in which to find output")
 	parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
+	parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow")
 	parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
 	parser.add_argument("-u", "--union", action="store_true", help="""
 	    Join all items with same ID for feature_type (specified by -f)
@@ -131,11 +138,10 @@ def main():
 	parser.add_argument("-od", "--output_directory", required=True, help="Name of Mucor output directory")
 
 	args = parser.parse_args()
-
 	if not os.path.exists(args.gff):
 	    abortWithMessage("Could not find GFF file {0}".format(args.gff))
 	for db in str(args.database).split(','):
-		if str_to_bool(db) and not os.path.exists(db):
+		if str_to_bool(db) and not os.path.exists(os.path.expanduser(db)):
 			abortWithMessage("Could not find SNV DB file {0}".format(db))
 	if not args.project_directory or not os.path.exists(args.project_directory):
 		print("Project directory not found; using CWD")
