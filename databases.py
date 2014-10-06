@@ -57,17 +57,17 @@ def parseDB(db, snps, duplicateAnnots):  # parse database in VCF format
 		alt   = col[4]
 		#source= str("dbSNP")
 		if not snps.has_key((chrom,pos)):
-			snps[(chrom,pos)] = KnownVariant(source=[source],chrom=chrom,pos=pos,ref=ref,alt=alt,rs=[rs])
+			snps[(chrom,pos)] = ([source],str(chrom),int(pos),str(ref),str(alt),[rs]) #{'source':[source],'chrom':str(chrom),'pos':int(pos),'ref':str(ref),'alt':str(alt),'rs':[rs]}
 		elif snps.has_key((chrom,pos)): 
-			if snps[(chrom,pos)].ref == ref and snps[(chrom,pos)].alt == alt:
-				if snps[(chrom,pos)].rs != rs:
-					snps[(chrom,pos)].rs.append(rs)
-					snps[(chrom,pos)].source.append(source)
-				elif snps[(chrom,pos)].rs == rs:
+			if snps[(chrom,pos)][3] == ref and snps[(chrom,pos)][4] == alt:
+				if snps[(chrom,pos)][5] != rs:
+					snps[(chrom,pos)][5].append(rs)
+					snps[(chrom,pos)][0].append(source)
+				elif snps[(chrom,pos)][5] == rs:
 					pass
 			else:
-				duplicateAnnots.add(snps[(chrom,pos)])
-				duplicateAnnots.add(KnownVariant(source=[source],chrom=chrom,pos=pos,ref=ref,alt=alt,rs=[rs]))
+				duplicateAnnots.append(snps[(chrom,pos)])
+				duplicateAnnots.append(([source],str(chrom),int(pos),str(ref),str(alt),[rs]))
 				'''
 				pdb.set_trace()
 				abortWithMessage("Error: {0} from {1} already exists as a different SNV".format( str((chrom,pos)), str(db).split('/')[-1] ))
@@ -79,7 +79,7 @@ def parseDB(db, snps, duplicateAnnots):  # parse database in VCF format
 def load_db(dbs):
 	startTime = time.clock()
 	snps = {}
-	duplicateAnnots = set()
+	duplicateAnnots = list()
 	for db in dbs:
 		if not str_to_bool(db):
 			pass

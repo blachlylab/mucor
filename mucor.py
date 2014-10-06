@@ -536,7 +536,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
             if snps.has_key((chr, pos)):
-                datab = str(set(snps[(chr,pos)].source))
+                datab = str( x for x in set(snps[(chr,pos)][0]) )
             else:
                 datab = str('?')
             '''
@@ -664,7 +664,7 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                         ofVariantDetails.write(str('?') + '\t')
                 if database_switch:
                     if isAnnotatedSNP(snps, tuple((str(var.pos.chrom),str(var.pos.pos)))):
-                        ofVariantDetails.write(var.datab + '\t') # snps[(var.pos.chrom, var.pos.pos)].rs
+                        ofVariantDetails.write(snps[((str(var.pos.chrom),str(var.pos.pos)))][0] + '\t') # snps[(var.pos.chrom, var.pos.pos)].rs
                     else:
                         ofVariantDetails.write(str('?') + '\t')
                 ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
