@@ -30,6 +30,7 @@ import pandas as pd
 import mucorfilters as mf
 from variant import Variant
 from mucorfeature import MucorFeature
+from databases import load_db, isAnnotatedSNP 
 
 class Info:
     '''Program info: logo, version, and usage'''
@@ -112,43 +113,11 @@ def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
     exit(2)
 
-
-######## Karl Added ##############
-# makes a dictionary out of dbSNP,
-# with tuple of chrom,position as the key; and the rs number as values.
-#
-def load_dbsnp():
-    startTime = time.clock()
-    snps = defaultdict(str)
-    dbsnp_p = '/nfs/17/osu7366/projects/new_AK/dbSNPandMiSeq.P'
-    #dbsnp_file = '/nfs/17/osu7366/reference/snp138Common.txt.gz'
-    #dbsnp = gzip.open(dbsnp_file,'rb')
-    print("\n=== Reading dbSNP pickle file {0} ===".format(dbsnp_p))
-    '''
-    for line in dbsnp:
-        col = line.split('\t')
-        if str(col[11]) == "deletion": # deletions in our VCF file start 1 base upstream (-1) from dbSNP, but have the correct rs number
-            snps[tuple((str(col[1]), int(col[3]) - 1))] = str(col[4])
-        else:
-            snps[tuple((str(col[1]), int(col[3])))] = str(col[4])
-    '''
-    snps = pickle.load(open(dbsnp_p,'rb'))
-    totalTime = time.clock() - startTime
-    print("{0} sec\t{1} SNPs".format(int(totalTime), len(snps.values())))
-    return snps
-
-##################################
-
-######## Karl Added ##############
-# true or false to check if a location
-# (tuple of chrom,position) is in the dbSNP dictionary. 
-# must use defaultdict above to avoid key errors here
-def in_dbsnp(snps, loc):
-    status = False
-    annotation = snps[loc]
-    if str(annotation).startswith('rs'):
-        status = True
-    return status
+def str_to_bool(s):
+    if str(s) == 'False':
+        return False
+    else:
+        return True
 
 ######## Karl Modified ##############
 # new, separate function to construct the genomic array of sets
@@ -207,9 +176,10 @@ def parseJSON(json_config):
     union = JD['union']
     fast = JD['fast']
     gff = JD['gtf']
+    database = JD['database']
     filters = defaultdict(bool)
-    global MuTect_switch
-    MuTect_switch = False
+    global database_switch
+    database_switch = str_to_bool(database[0])
     global SnpEff_switch
     SnpEff_switch = False
     for i in JD['filters']:
@@ -219,13 +189,16 @@ def parseJSON(json_config):
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
             filename2samples[filename] = i['id']
+            '''
             if not MuTect_switch and str(j['source']) == str('Mutect') and str(j['type']) == str('mutect'):
                 MuTect_switch = bool(True)
+                pass
+            '''
             if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
                 SnpEff_switch = bool(True)
             input_files.append(j['path'])
 
-    return featureType, outputDir, union, fast, gff, filters, input_files
+    return featureType, outputDir, union, fast, gff, database, filters, input_files
 
 def parseGffFile(gffFileName, featureType, fast):
     '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
@@ -315,15 +288,17 @@ def parse_IonTorrent(row, fieldId, header):
             break
     return VF, DP, position
 
-def parse_MuTectOUT(row, fieldId, MuTect_Annotations):
+def parse_MuTectOUT(row, fieldId): # ,MuTect_Annotations
     VF = row[fieldId['tumor_f']]
     DP = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
     position = int(row[fieldId['position']])
+    '''
     MuTect_Annotations[tuple(( str(row[0]), position) )] = row[fieldId['dbsnp_site']]
+    '''
 
-    return VF, DP, position, MuTect_Annotations 
+    return VF, DP, position # , MuTect_Annotations 
     
-def parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations):
+def parse_MuTectVCF(row, fieldId, header, fn): # , MuTect_Annotations)
     j = 0
     for i in header:
         if str('-') in str(i): # This line should detect if the sample id is in the line. Should be rewritten for samples without a "-" in their name
@@ -338,7 +313,7 @@ def parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations):
     '''
     global MuTect_switch
     MuTect_switch = True
-    '''
+    
     if MuTect_switch == True and os.path.exists(fn.replace('_snpEff.vcf', '.out')) and str(fn.replace('_snpEff.vcf', '.out')) != str(fn):
         MuTect_output = fn.replace('_snpEff.vcf', '.out')
         for line in open(MuTect_output):
@@ -347,7 +322,9 @@ def parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations):
                 break
             else:
                 continue
-    return VF, DP, position, MuTect_Annotations
+    '''
+
+    return VF, DP, position # , MuTect_Annotations
 
 def parse_SomaticIndelDetector(row, fieldId, header):
     j = 0
@@ -391,8 +368,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
     # TO DO: also interpret from VCF
 
     startTime = time.clock()
+    '''
     global MuTect_Annotations
     MuTect_Annotations = defaultdict(str)
+    '''
 
     # All variants stored in long (record) format
     # in a pandas dataframe
@@ -501,11 +480,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             elif IonTorrent:
                 VF, DP, position = parse_IonTorrent(row, fieldId, header)
             elif Mutect:
-                VF, DP, position, MuTect_Annotations = parse_MuTectVCF(row, fieldId, header, fn, MuTect_Annotations)
+                VF, DP, position = parse_MuTectVCF(row, fieldId, header, fn) # , MuTect_Annotations)
             elif SomaticIndelDetector:
                 VF, DP, position = parse_SomaticIndelDetector(row, fieldId, header)
             elif Mutector:
-                VF, DP, position, MuTect_Annotations = parse_MuTectOUT(row, fieldId, MuTect_Annotations)
+                VF, DP, position = parse_MuTectOUT(row, fieldId) # , MuTect_Annotations)
             elif Samtools:
                 VF, DP, position = parse_SamTools(row, fieldId, header)
             elif VarScan:
@@ -537,9 +516,14 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps):
             #sample = fn.split('/')[-1]      # to do, will need to come from JSON config
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
-            datab = str('?')
+            if snps.has_key((chr, pos)):
+                datab = str(set(snps[(chr,pos)].source))
+            else:
+                datab = str('?')
+            '''
             if Mutect or Mutector:
                 datab = MuTect_Annotations[(chr, pos)]
+            '''
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
@@ -628,43 +612,44 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
     ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tSource\t') ######## Karl Modified ##############
     if SnpEff_switch:
         ofVariantDetails.write('Effect\tFC\t')
-    if MuTect_switch:
+    if database_switch:
         ofVariantDetails.write('Annotation\t')
     ofVariantDetails.write('Count\n')
 
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
-                if not in_dbsnp(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
-                    ofVariantDetails.write(feature.name + '\t')
-                    ofVariantDetails.write(var.pos.chrom + '\t')
-                    ofVariantBeds.write(var.pos.chrom + '\t')
-                    ofVariantDetails.write(str(var.pos.pos) + '\t')
-                    ofVariantBeds.write(str(var.pos.pos - 1) + '\t')
-                    ofVariantBeds.write(str(var.pos.pos) + '\t')
-                    #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + '\t')
-                    ofVariantDetails.write(var.ref + '\t')
-                    ofVariantDetails.write(var.alt + '\t')
-                    ofVariantDetails.write(var.frac + '\t')
-                    ofVariantDetails.write(var.dp + '\t')
-                    ofVariantDetails.write(var.source + '\t')
-                    if SnpEff_switch:
-                        if str(var.eff) != str(''):
-                            #pdb.set_trace()
-                            ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
-                        else:
-                            ofVariantDetails.write(str('?') + '\t')
-                        if str(var.fc) != str(''):
-                            ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
-                        else:
-                            ofVariantDetails.write(str('?') + '\t')
-                    if MuTect_switch:
-                        if str(MuTect_Annotations[(var.pos.chrom, var.pos.pos)]) != str(''):
-                            ofVariantDetails.write(MuTect_Annotations[(var.pos.chrom, var.pos.pos)] + '\t')
-                        else:
-                            ofVariantDetails.write(str('?') + '\t')
-                    ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
-                    ofVariantBeds.write('\n')
+                pdb.set_trace()
+                #if not isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
+                ofVariantDetails.write(feature.name + '\t')
+                ofVariantDetails.write(var.pos.chrom + '\t')
+                ofVariantBeds.write(var.pos.chrom + '\t')
+                ofVariantDetails.write(str(var.pos.pos) + '\t')
+                ofVariantBeds.write(str(var.pos.pos - 1) + '\t')
+                ofVariantBeds.write(str(var.pos.pos) + '\t')
+                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + '\t')
+                ofVariantDetails.write(var.ref + '\t')
+                ofVariantDetails.write(var.alt + '\t')
+                ofVariantDetails.write(var.frac + '\t')
+                ofVariantDetails.write(var.dp + '\t')
+                ofVariantDetails.write(var.source + '\t')
+                if SnpEff_switch:
+                    if str(var.eff) != str(''):
+                        #pdb.set_trace()
+                        ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                    else:
+                        ofVariantDetails.write(str('?') + '\t')
+                    if str(var.fc) != str(''):
+                        ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                    else:
+                        ofVariantDetails.write(str('?') + '\t')
+                if database_switch:
+                    if isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):
+                        ofVariantDetails.write(var.datab + '\t') # snps[(var.pos.chrom, var.pos.pos)].rs
+                    else:
+                        ofVariantDetails.write(str('?') + '\t')
+                ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
+                ofVariantBeds.write('\n')
         ########### Karl added bed file output here #############
     ofVariantDetails.close()
     ofVariantBeds.close()
@@ -680,7 +665,7 @@ def main():
     print("\t{0}".format(time.ctime() ) )
     print()
 
-    featureType, outputDir, union, fast, gff, filters, input_files = parseJSON(sys.argv[1])
+    featureType, outputDir, union, fast, gff, database, filters, input_files = parseJSON(sys.argv[1])
 
     if not os.path.exists(gff):
         abortWithMessage("Could not find GFF file {0}".format(gff))
@@ -700,8 +685,7 @@ def main():
 
     knownFeatures, gas = parseGffFile(str(gff), str(featureType), bool(fast))
 
-    snps =  defaultdict(tuple) # load_dbsnp() ######## Karl Added ##############
-
+    snps =  load_db(database) ######## Karl Modified ##############
     varDF, knownFeatures, gas, snps = parseVariantFiles(list(input_files), knownFeatures, gas, snps)
     printOutput(list(input_files), str(outputDir), knownFeatures, gas, snps) ######## Karl Modified ##############
     

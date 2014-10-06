@@ -12,6 +12,12 @@ def abortWithMessage(message, help = False):
         print("*** FATAL ERROR: " + message + " ***")
         exit(2)
 
+def str_to_bool(s):
+	if str(s) == 'False':
+		return False
+	else:
+		return True
+
 def DetectDataType(fn):
 	varFile = open(fn, 'r')
 	varReader = csv.reader(varFile, delimiter='\t')
@@ -81,6 +87,7 @@ def thing(args, proj_dir):
 	json_dict['feature'] = str(args.featuretype)
 	json_dict['filters'] = ['MUTECT-KEEP', 'VCF-PASS']
 	json_dict['samples'] = list(dict())
+	json_dict['database'] = str(args.database).split(',')
 	for id in open(args.samples):
 		sid = id.strip()
 		if str(sid) == "":
@@ -105,6 +112,7 @@ def thing(args, proj_dir):
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
+	parser.add_argument("-db", "--database", default=False, help="Comma separated list of known SNV databases in VCF format")
 	parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names")
 	parser.add_argument("-d", "--project_directory", required=False, help="Project root directory, in which to find output")
 	parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
@@ -126,6 +134,9 @@ def main():
 
 	if not os.path.exists(args.gff):
 	    abortWithMessage("Could not find GFF file {0}".format(args.gff))
+	for db in str(args.database).split(','):
+		if str_to_bool(db) and not os.path.exists(db):
+			abortWithMessage("Could not find SNV DB file {0}".format(db))
 	if not args.project_directory or not os.path.exists(args.project_directory):
 		print("Project directory not found; using CWD")
 		proj_dir = cwd
