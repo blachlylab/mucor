@@ -368,26 +368,20 @@ def parse_VarScan(row, fieldId, header):
 
 def filterRow(row, fieldId, filters):
     try:
-        for rowFilter in str(row[fieldId['FILTER']]).split(';'):
-            if rowFilter not in filters:           ## VCF file format
+        for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
+            if rowFilter not in filters:
                 return True
                 break
     except KeyError:
-        for rowFilter in str(row[fieldId['judgement']]).split(';'):
-            if rowFilter not in filters:        ## MuTect '.out' file format
+        for rowFilter in str(row[fieldId['judgement']]).split(';'): ## MuTect '.out' file format
+            if rowFilter not in filters:
                 return True
                 break
     return False
 
 def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
-    # parse the variant files (muTect format)
-    # TO DO: also interpret from VCF
-
+    # parse the variant files (VCF, muTect format)
     startTime = time.clock()
-    '''
-    global MuTect_Annotations
-    MuTect_Annotations = defaultdict(str)
-    '''
 
     # All variants stored in long (record) format
     # in a pandas dataframe
@@ -395,12 +389,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
-        #print("\t{0}\t".format(fn), end='')    # moved to end to print after clock
 
         varFile = open(fn, 'rb')    # TO DO: error handling
         varReader = csv.reader(varFile, delimiter='\t')
 
-        # '## muTector v1.0.47986'
         try:
             row = varReader.next()
         except StopIteration:
@@ -448,32 +440,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
         read_depth_min = 0
         # after reading the two header rows, read data
         for row in itertools.islice(varReader, None):
+            if filterRow(row, fieldId, filters):    # filter rows as they come in, to prevent them from entering the dataframe
+                continue                            # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
 
-            ############## Karl Added / Modified ################
-            ######### Added variant frequency and depth to the file reading ########
-
-            #############
-            ## FILTERS ##   
-            #############
-            #if row[fieldId['FILTER']] != 'PASS': continue
-            if filterRow(row, fieldId, filters):
-                continue
-            '''
-            try:
-                if row[fieldId['FILTER']] == 'REJECT': continue      ## VCF file format
-            except KeyError:
-                if row[fieldId['judgement']] == 'REJECT': continue   ## MuTect '.out' file format
-            '''
-            '''
-            if MiSeq and str(row[fieldId['ID']])[0:2] == 'rs': 
-                chrom = str(row[fieldId['#CHROM']])
-                position = str(row[fieldId['POS']])
-                print("found annotated mutation " + str(row[fieldId['ID']]) + " not in snp dictionary\n\tadding it now")
-                snps[tuple((str(chrom),int(position)))] = str(row[fieldId['ID']])
-                continue
-            '''
-            #if str(row[fieldId['INFO']]).split(';')[3].split('=')[1] >= int(read_depth_min): continue
-            
             # make a variant object for row
             # TO DO: change row index#s to column names or transition to row object
 
@@ -655,7 +624,6 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                 ofVariantDetails.write(var.source + '\t')
                 if SnpEff_switch:
                     if str(var.eff) != str(''):
-                        #pdb.set_trace()
                         ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
                     else:
                         ofVariantDetails.write(str('?') + '\t')
