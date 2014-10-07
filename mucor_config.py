@@ -157,12 +157,11 @@ def main():
 	else:
 		proj_dir = args.project_directory
 
-    json_dict = thing(args, proj_dir)
-    if os.path.exists(args.json_config_output):
-        abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
-    output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")
-    json.dump(json_dict, output_file, sort_keys=True, indent=4, ensure_ascii=True)
-
+	json_dict = thing(args, proj_dir)
+	if os.path.exists(args.json_config_output):
+		abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
+	output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")
+	json.dump(json_dict, output_file, sort_keys=True, indent=4, ensure_ascii=True)
 
 if __name__ == "__main__":
-    main()
+	main()
