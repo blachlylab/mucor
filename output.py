@@ -7,10 +7,10 @@
 import os
 import pandas as pd
 
-class Writer(object)
-"""Object that parses the mucor dataframe and can write output in several different formats"""
+class Writer(object):
+    """Object that parses the mucor dataframe and can write output in several different formats"""
     
-    def __init__(self): 
+    def __init__(self):
         self.data = pd.DataFrame()
         
         #self.supported_formats = ["default", "long"] # FUTURE: VCF, GVF, XLS
@@ -18,10 +18,10 @@ class Writer(object)
                                     "long": self.long }
 
     def write(self, data, format, outdir):
-    """Write data in format to outdir
-data: a pandas dataframe
-format: a string: one of [default, vcf, gvf, xls]   # consider merging in report functionality
-outdir: a string"""
+        """Write data in format to outdir
+        data: a pandas dataframe
+        format: a string: one of [default, vcf, gvf, xls]   # consider merging in report functionality
+        outdir: a string"""
         
         # Parameter integrity/validity checks
         if (type(data) == pd.DataFrame):
@@ -54,9 +54,9 @@ outdir: a string"""
             
             # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
             # so we will sort by feature (gene etc.) then position
-            self.data.sort(columns=['feature','pos'], inplace=True)
-            self.data.replace('', np.nan, inplace=True)
-            self.data.to_csv(self.outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
+        self.data.sort(columns=['feature','pos'], inplace=True)
+        self.data.replace('', np.nan, inplace=True)
+        self.data.to_csv(self.outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
 
     def vcf():
         """Print output in multi-sample VCF 4.1 format"""
