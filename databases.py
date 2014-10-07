@@ -93,8 +93,6 @@ def load_db(dbs):
 		print("*** WARNING: {0} mutations have identical positions, but different REF/ALTs".format(len(duplicateAnnots)))
 	return snps
 
-##################################
-
 ######## Karl Added ##############
 # true or false to check if a location
 # (tuple of chrom,position) is in the dbSNP dictionary. 
