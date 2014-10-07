@@ -9,6 +9,7 @@ import gzip
 import pdb
 from collections import defaultdict
 import time
+import tabix
 
 class KnownVariant:
 	'''Data about known variants '''
@@ -81,13 +82,13 @@ def load_db(dbs):
 	snps = {}
 	duplicateAnnots = list()
 	for db in dbs:
-		if not str_to_bool(db):
+		if not bool(db):
 			pass
 		else:
 			print("\n=== Reading db file {0} ===".format(db))
 			parseDB(db, snps, duplicateAnnots)
 	totalTime = time.clock() - startTime
-	if str_to_bool(db):
+	if bool(db):
 		print("{0} sec\t{1} SNPs".format(int(totalTime), len(snps.values())))
 	if duplicateAnnots:
 		print("*** WARNING: {0} mutations have identical positions, but different REF/ALTs".format(len(duplicateAnnots)))
@@ -97,10 +98,48 @@ def load_db(dbs):
 # true or false to check if a location
 # (tuple of chrom,position) is in the dbSNP dictionary. 
 # must use defaultdict above to avoid key errors here
+'''
 def isAnnotatedSNP(snps, loc):
 	if snps.has_key(tuple(loc)):
 		return bool(True)
 	elif not snps.has_key(loc):
 		return bool(False)
+'''
+def isAnnotatedSNP(var, dbs):
+	try:
+		chrom = int(str(var.pos.chrom).strip('chr'))
+	except:
+		if str(var.pos.chrom).strip('chr') == "X":
+			chrom = int(23)
+		elif str(var.pos.chrom).strip('chr') == "Y":
+			chrom = int(24)
+	spos = int(var.pos.pos - 1)
+	epos = int(var.pos.pos)
+	ref = var.ref
+	alt = var.alt
+	#pdb.set_trace()
+	for db in dbs:
+		if not bool(db):
+			pass
+		else:
+			if str(db).split('.')[-1] == str("gz"):
+				database = gzip.open(db)
+			elif str(db).split('.')[-1] == str("vcf"):
+				abortWithMessage("Error: database file {0} must compressed with bgzip".format(db))
+			else: abortWithMessage("Error opening database files: {0}".format(db))
+			try:
+				row = database.readline()
+			except StopIteration: 
+				print("Empty file {}".format(db))
+			while str(row)[0:2] == '##':
+				if str("source=") in str(row):
+					source = str(row).split("=")[1].strip()
+				row = database.readline()
+			tb = tabix.open(db)
+			for row in tb.queryi(chrom, spos, epos):
+				if str(row[3]) == ref and str(row[4]) == alt:
+					return True, str(row[2])
+					break
+	return False, str('?')
 
 ##################################

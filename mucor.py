@@ -183,10 +183,13 @@ def parseJSON(json_config):
     union = JD['union']
     fast = JD['fast']
     gff = JD['gtf']
-    database = JD['database']
+    if str(JD['database']) == str("[u'[]']"):
+        database = []
+    else:
+        database = JD['database']
     filters = JD['filters']
     global database_switch
-    database_switch = str_to_bool(database[0])
+    database_switch = bool(database)
     global SnpEff_switch
     SnpEff_switch = False
     '''
@@ -393,7 +396,7 @@ def filterRow(row, fieldId, filters):
                 break
     return False
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
+def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # snps
     # parse the variant files (VCF, muTect format)
     startTime = time.clock()
 
@@ -519,10 +522,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
             #sample = fn.split('/')[-1]      # to do, will need to come from JSON config
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
-            if snps.has_key((chr, pos)):
-                datab = str( x for x in set(snps[(chr,pos)][0]) )
-            else:
-                datab = str('?')
+            rowAnnotated, rowAnnotation = isAnnotatedSNP(var, database)
+            datab = str(rowAnnotation)
+
             '''
             if Mutect or Mutector:
                 datab = MuTect_Annotations[(chr, pos)]
@@ -543,9 +545,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, snps, filters):
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos = varDF.pos.astype(int)
-    return varDF, knownFeatures, gas, snps
+    return varDF, knownFeatures, gas # , snps
 
-def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Modified ##############
+def printOutput(argv, outputDirName, knownFeatures, gas, varDF): # , snps): ######## Karl Modified ##############
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
@@ -646,10 +648,10 @@ def printOutput(argv, outputDirName, knownFeatures, gas, snps): ######## Karl Mo
                     else:
                         ofVariantDetails.write(str('?') + '\t')
                 if database_switch:
-                    if isAnnotatedSNP(snps, tuple((str(var.pos.chrom),str(var.pos.pos)))):
-                        ofVariantDetails.write(snps[((str(var.pos.chrom),str(var.pos.pos)))][0] + '\t') # snps[(var.pos.chrom, var.pos.pos)].rs
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
+                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + '\t') 
                     else:
-                        ofVariantDetails.write(str('?') + '\t')
+                        pdb.set_trace()
                 ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
                 ofVariantBeds.write('\n')
         ########### Karl added bed file output here #############
@@ -668,7 +670,6 @@ def main():
     print()
 
     featureType, outputDir, union, fast, gff, database, filters, input_files, config = parseJSON(sys.argv[1])
-
     if not os.path.exists(gff):
         abortWithMessage("Could not find GFF file {0}".format(gff))
     if os.path.exists(outputDir) and os.listdir(outputDir):
@@ -687,15 +688,15 @@ def main():
 
     knownFeatures, gas = parseGffFile(str(gff), str(featureType), bool(fast))
 
-    snps =  load_db(database) ######## Karl Modified ##############
+    #snps =  load_db(database) ######## Karl Modified ##############
     '''
     outsnps = open('outsnps.p','rb')
     pickle.dump(snps,outsnps)
     outsnps.close()
     abortWithMessage("done making snps dict")
     '''
-    varDF, knownFeatures, gas, snps = parseVariantFiles(list(input_files), knownFeatures, gas, snps, filters)
-    printOutput(list(input_files), str(outputDir), knownFeatures, gas, snps) ######## Karl Modified ##############
+    varDF, knownFeatures, gas = parseVariantFiles(list(input_files), knownFeatures, gas, database, filters)
+    printOutput(list(input_files), str(outputDir), knownFeatures, gas, varDF) ######## Karl Modified ##############
     
     ## ## ##
     # print record format (long format) all variants data frame
