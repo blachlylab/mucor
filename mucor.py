@@ -383,6 +383,37 @@ def parse_VarScan(row, fieldId, header):
         j += 1
     return VF, DP, position
 
+def parse_HapCaller(row, fieldId, header):
+    j = 0
+    position = int(row[fieldId['POS']])
+    for i in row[fieldId['FORMAT']].split(':'):
+        if str(i) == "DP":
+            DP = int(row[fieldId[header[-1]]].split(':')[j])
+        if str(i) == "AD":
+            AD = str(row[fieldId[header[-1]]].split(':')[j])
+            if str(',') in AD:
+                ref = int(AD.split(',')[0])
+                alt = int(AD.split(',')[1])
+                VF = float( float(alt)/(float(ref) + float(alt)) )
+            else:
+                abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or VF".format(header[-1]))
+        j += 1
+    return VF, DP, position
+
+def parse_FreeBayes(row, fieldId, header):
+    j = 0
+    position = int(row[fieldId['POS']])
+    for i in row[fieldId['FORMAT']].split(':'):
+        if str(i) == "DP":
+            DP = int(row[fieldId[header[-1]]].split(':')[j])
+        if str(i) == "RO":
+            RO = int( str(row[fieldId[header[-1]]].split(':')[j]) )
+        if str(i) == "AO":
+            AO = int( str(row[fieldId[header[-1]]].split(':')[j]) )
+        j += 1
+    VF = float( float(AO)/float(AO + RO) )
+    return VF, DP, position
+
 def filterRow(row, fieldId, filters):
     try:
         for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
@@ -432,6 +463,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # sn
         Samtools = False
         global VarScan 
         VarScan = False
+        global HapCaller
+        HapCaller = False
+        global FreeBayes
+        FreeBayes = False
         while str(row).split("'")[1][0:2] == '##':
             if str('Torrent Unified Variant Caller') in str(row): 
                 IonTorrent = True
@@ -447,6 +482,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # sn
                 Samtools = True
             elif str('source=VarScan') in str(row):
                 VarScan = True
+            elif str('ID=HaplotypeCaller') in str(row):
+                HapCaller = True
+            elif str('freeBayes') in str(row):
+                FreeBayes = True
             row = varReader.next()
         
         header = row
@@ -495,9 +534,12 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # sn
                 VF, DP, position = parse_SamTools(row, fieldId, header)
             elif VarScan:
                 VF, DP, position = parse_VarScan(row, fieldId, header)
+            elif HapCaller:
+                VF, DP, position = parse_HapCaller(row, fieldId, header)
+            elif FreeBayes:
+                VF, DP, position = parse_FreeBayes(row, fieldId, header)
             else:
-                print("This isn't MiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, or Mutect data?")
-                sys.exit(1)
+                abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
             var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
             ###########################################
 
