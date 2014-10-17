@@ -117,7 +117,7 @@ def isAnnotatedSNP(var, dbs):
 	epos = int(var.pos.pos)
 	ref = var.ref
 	alt = var.alt
-	#pdb.set_trace()
+	datab = ""
 	for db in dbs:
 		if not bool(db):
 			pass
@@ -136,10 +136,13 @@ def isAnnotatedSNP(var, dbs):
 					source = str(row).split("=")[1].strip()
 				row = database.readline()
 			tb = tabix.open(db)
-			for row in tb.queryi(chrom, spos, epos):
-				if str(row[3]) == ref and str(row[4]) == alt:
-					return True, str(row[2])
-					break
-	return False, str('?')
+			if len(str(alt).split(',')) >= 1:
+				for row in tb.queryi(chrom, spos, epos):
+					if str(row[3]) == ref and str(row[4]) in str(alt).split(','):
+						datab += str(row[2]) + ", "
+	if str(datab) != "":
+		return True, str(datab.strip(', '))
+	elif str(datab) == "":
+		return False, str('?')
 
 ##################################

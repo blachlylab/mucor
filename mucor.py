@@ -308,7 +308,7 @@ def parse_IonTorrent(row, fieldId, header):
             break
     return VF, DP, position
 
-def parse_MuTectOUT(row, fieldId): # ,MuTect_Annotations
+def parse_MuTectOUT(row, fieldId): 
     VF = row[fieldId['tumor_f']]
     DP = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
     position = int(row[fieldId['position']])
@@ -316,12 +316,12 @@ def parse_MuTectOUT(row, fieldId): # ,MuTect_Annotations
     MuTect_Annotations[tuple(( str(row[0]), position) )] = row[fieldId['dbsnp_site']]
     '''
 
-    return VF, DP, position # , MuTect_Annotations 
+    return VF, DP, position 
     
-def parse_MuTectVCF(row, fieldId, header, fn): # , MuTect_Annotations)
+def parse_MuTectVCF(row, fieldId, header, fn): 
     j = 0
     for i in header:
-        if str('-') in str(i): # This line should detect if the sample id is in the line. Should be rewritten for samples without a "-" in their name
+        if str(i) not in ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'none']: # This line should detect if the sample id is in the line.
             tmpsampID = i
     for i in row[fieldId['FORMAT']].split(':'):
         if i == "FA":
@@ -344,13 +344,22 @@ def parse_MuTectVCF(row, fieldId, header, fn): # , MuTect_Annotations)
                 continue
     '''
 
-    return VF, DP, position # , MuTect_Annotations
+    return VF, DP, position 
 
 def parse_SomaticIndelDetector(row, fieldId, header):
     j = 0
+    '''
+    #only works for samples with a dash (-) in them
     for i in header:
         if str('-') in str(i):
             tmpsampID = i
+    '''
+    # <solution to above> 
+    #       assumes that sample ID is the final column in the header. always true? 
+    #       if not always true, adopt the parse_mutect solution here as well
+    tmpsampID = header[-1]
+    # </solution to above>
+    
     for i in row[fieldId['FORMAT']].split(':'):
         if i == "AD":
             ALT_count = row[fieldId[tmpsampID]].split(':')[j].split(',')[1]
@@ -409,7 +418,7 @@ def parse_FreeBayes(row, fieldId, header):
         if str(i) == "RO":
             RO = int( str(row[fieldId[header[-1]]].split(':')[j]) )
         if str(i) == "AO":
-            AO = int( str(row[fieldId[header[-1]]].split(':')[j]) )
+            AO = int(  sum([ int(x) for x in str(row[fieldId[header[-1]]].split(':')[j]).split(',')]) )
         j += 1
     VF = float( float(AO)/float(AO + RO) )
     return VF, DP, position
@@ -427,7 +436,7 @@ def filterRow(row, fieldId, filters):
                 break
     return False
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # snps
+def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): 
     # parse the variant files (VCF, muTect format)
     startTime = time.clock()
 
@@ -587,9 +596,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): # sn
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos = varDF.pos.astype(int)
-    return varDF, knownFeatures, gas # , snps
+    return varDF, knownFeatures, gas 
 
-def printOutput(argv, outputDirName, knownFeatures, gas, varDF): # , snps): ######## Karl Modified ##############
+def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl Modified ##############
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
@@ -643,10 +652,6 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): # , snps): ####
             ofCounts.write(str(knownFeatures[feature.name].numUniqueSamples()) + '\n')
 
             nrow += 1
-        '''
-        else:
-            print(feature)
-        '''
     
     print("\t{0}: {1} rows".format(ofCounts.name, nrow))
     ofCounts.close()
@@ -693,7 +698,11 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): # , snps): ####
                     if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
                         ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + '\t') 
                     else:
-                        pdb.set_trace()
+                        tempdb = ""
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                            if str(i) not in str(tempdb):
+                                tempdb += str(i) + ","
+                        ofVariantDetails.write(tempdb.strip(',') + '\t')
                 ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
                 ofVariantBeds.write('\n')
         ########### Karl added bed file output here #############

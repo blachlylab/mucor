@@ -52,6 +52,12 @@ def DetectDataType(fn):
         elif str('source=VarScan') in str(row):
             return "VarScan"
             break
+        elif str('ID=HaplotypeCaller') in str(row):
+            return "HaplotypeCaller"
+            break
+        elif str('freeBayes') in str(row):
+            return "FreeBayes"
+            break
         row = varReader.next()
     return "Unknown"
 
