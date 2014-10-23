@@ -113,6 +113,13 @@ def isAnnotatedSNP(var, dbs):
 			chrom = int(23)
 		elif str(var.pos.chrom).strip('chr') == "Y":
 			chrom = int(24)
+	try:
+		chrom
+	except:
+		# chromosome is undefined; not a number, not an X or a Y. 
+		#     This includes chrM and alternative contigs
+		return False, str('?')
+		pass
 	spos = int(var.pos.pos - 1)
 	epos = int(var.pos.pos)
 	ref = var.ref
