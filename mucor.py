@@ -436,6 +436,23 @@ def filterRow(row, fieldId, filters):
                 break
     return False
 
+def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
+    if len(ref) != len(alt):
+        for kvar in knownFeatures[featureName].variants:
+            if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)) == str(indelDelta(kvar.ref, kvar.alt)):
+                return True, kvar.ref, kvar.alt
+                break
+    return False, '', ''
+
+def indelDelta(ref, alt):
+    ''' Detects the inserted or deleted bases of an indel'''
+    if len(alt) > len(ref):             # insertion
+        return alt.replace(ref,"",1)
+    elif len(alt) < len(ref):           # deletion
+        return ref.replace(alt,"",1)
+    else:                               # SNP / MNP
+        print("this is a snp")
+
 def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): 
     # parse the variant files (VCF, muTect format)
     startTime = time.clock()
@@ -558,6 +575,13 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
                 #print var.pos              # and each feature with matching ID gets allocated the variant
                 #print(gas[ var.pos ])      # 
                 for featureName in resultSet:
+                    skipDupIndel, kvarref, kvaralt = skipThisIndel(var.ref, var.alt, knownFeatures, featureName, position, var)
+                    if bool(skipDupIndel):
+                        # Sanity check to see what indels are being overwritten by existing vars
+                        #print(var.pos.chrom, var.pos.pos, var.ref, var.alt, kvarref, kvaralt)
+                        var.ref = kvarref
+                        var.alt = kvaralt
+                    
                     knownFeatures[featureName].variants.add(var)
             
             # Descriptive variable names
@@ -577,20 +601,31 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
             datab = str(rowAnnotation)
 
             '''
+            if ( str('NM_001290815') in str(feature) or str(feature) == "NM_001290815" ) and str(chr) == "chr19" and int(pos) == 57110490:
+                pdb.set_trace()
+                # for i in knownFeatures['NM_001290815'].variants: print(i.pos.pos)
+            '''
+
+
+            '''
             if Mutect or Mutector:
                 datab = MuTect_Annotations[(chr, pos)]
+            '''
+            '''
+            if skipThisIndel(ref, alt):
+                for var in knownFeatures[feature]
             '''
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
                                 [ chr , pos , ref , alt , vf , dp , feature , effect , fc , datab , sample , source ])) 
-            # add to variants data frame
+            # add to variants data frame dictionary
             for key in vardata.keys():
                 varD[key].append(vardata[key])
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
-    
+    # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
     # Removing columns from the following 'columns' list will mask them from output in allvars.txt
     varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'])
     # Clean up variant dataframe a little
@@ -598,21 +633,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas 
 
-def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl Modified ##############
-    '''Output statistics and variant details to the specified output directory.'''
-
-    startTime = time.clock()
-    print("\n=== Writing output files to {0}/ ===".format(outputDirName))
-
-    try:
-        # of = outputFile
+def printRunInfo(argv, outputDirName):
+    try: 
         ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
-        ofCounts = open(outputDirName + "/counts.txt", 'w+')
-        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
-        ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
     except:
         abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
     # =========================
     # run_info.txt
     #
@@ -625,6 +650,12 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl M
     ofRunInfo.write("Variants Pre-filter: \n")
     ofRunInfo.write("        Post-filter: \n")
     ofRunInfo.close()
+
+def printCounts(outputDirName, knownFeatures):
+    try:
+        ofCounts = open(outputDirName + "/counts.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
     # ============================================================
     # counts.txt
@@ -655,18 +686,27 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl M
     
     print("\t{0}: {1} rows".format(ofCounts.name, nrow))
     ofCounts.close()
-    totalTime = time.clock() - startTime
-    print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
+
+def printVariantDetails(outputDirName, knownFeatures, varDF):
+    try:
+        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
     # =========================================================
     # variant_details.txt
     #
-    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\tSource\t') ######## Karl Modified ##############
+
+    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t') ######## Karl Modified ##############
     if SnpEff_switch:
         ofVariantDetails.write('Effect\tFC\t')
     if database_switch:
         ofVariantDetails.write('Annotation\t')
-    ofVariantDetails.write('Count\n')
+    ofVariantDetails.write('Count\tSource\n')
+
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    nrow = 0
 
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
@@ -675,16 +715,12 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl M
                 #if not isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
                 ofVariantDetails.write(feature.name + '\t')
                 ofVariantDetails.write(var.pos.chrom + '\t')
-                ofVariantBeds.write(var.pos.chrom + '\t')
                 ofVariantDetails.write(str(var.pos.pos) + '\t')
-                ofVariantBeds.write(str(var.pos.pos - 1) + '\t')
-                ofVariantBeds.write(str(var.pos.pos) + '\t')
-                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + '\t')
                 ofVariantDetails.write(var.ref + '\t')
                 ofVariantDetails.write(var.alt + '\t')
                 ofVariantDetails.write(var.frac + '\t')
                 ofVariantDetails.write(var.dp + '\t')
-                ofVariantDetails.write(var.source + '\t')
+                
                 if SnpEff_switch:
                     if str(var.eff) != str(''):
                         ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
@@ -703,14 +739,53 @@ def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl M
                             if str(i) not in str(tempdb):
                                 tempdb += str(i) + ","
                         ofVariantDetails.write(tempdb.strip(',') + '\t')
-                ofVariantDetails.write(str(len(var.source.split(','))) + '\n')
-                ofVariantBeds.write('\n')
+                ofVariantDetails.write(str(len(var.source.split(','))) + '\t')
+                ofVariantDetails.write(var.source + '\n')
+                nrow += 1
+                
         ########### Karl added bed file output here #############
     ofVariantDetails.close()
-    ofVariantBeds.close()
-    
-    return 0
+    print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
 
+def printVariantBed(outputDirName, knownFeatures):
+    try:
+        ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    # =========================================================
+    # variant_details.txt
+    #
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    nrow = 0
+
+    for feature in sortedList:
+        if knownFeatures[feature.name].variants:
+            for var in knownFeatures[feature.name].uniqueVariants():
+                ofVariantBeds.write(var.pos.chrom + '\t')
+                ofVariantBeds.write(str(var.pos.pos - 1) + '\t')
+                ofVariantBeds.write(str(var.pos.pos) + '\t')
+                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + '\t') # used to write dbSNP name in bed name field
+                ofVariantBeds.write('\n')
+                nrow += 1
+    ofVariantBeds.close()
+    print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
+
+def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl Modified ##############
+    '''Output statistics and variant details to the specified output directory.'''
+
+    startTime = time.clock()
+    print("\n=== Writing output files to {0}/ ===".format(outputDirName))
+
+    # TODO: pull output options from json file (config class) and put if statements here to selectively output
+    printRunInfo(argv, outputDirName)
+    printCounts(outputDirName, knownFeatures)
+    printVariantDetails(outputDirName, knownFeatures, varDF)
+    printVariantBed(outputDirName, knownFeatures)
+
+    totalTime = time.clock() - startTime
+    print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
+    return 0
 
 def main():
     print(Info.logo)
