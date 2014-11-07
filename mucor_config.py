@@ -98,13 +98,12 @@ def filterFileList(json_dict_row):
 def thing(args, proj_dir):
 # TO DO : Pull these dictionary values from the 'Config' class variables for consistency
     json_dict = defaultdict()
-    json_dict['output_dir'] = str(args.output_directory).split('/')[-1]
+    json_dict['outputDir'] = str(args.output_directory).split('/')[-1]
     json_dict['gtf'] = str(args.gff)
     json_dict['union'] = bool(args.union)
     json_dict['fast'] = bool(args.no_archive)
     json_dict['feature'] = str(args.featuretype)
     json_dict['samples'] = list(dict())
-    json_dict['output_formats'] = ['default', 'long']   # future: xls, vcf, gvf
     outFilters = set(["PASS"])
     for i in str(args.vcf_filters).split(','):
         if i:
@@ -113,6 +112,9 @@ def thing(args, proj_dir):
     json_dict['database'] = []
     for i in str(args.database).split(','):
         json_dict['database'].append(os.path.expanduser(i))
+    json_dict['outputFormats'] = []
+    for i in str(args.output_type).split(','):
+        json_dict['outputFormats'].append(i)
     for id in open(args.samples):
         sid = id.strip()
         if str(sid) == "":
@@ -130,7 +132,7 @@ def thing(args, proj_dir):
                         elif str(i).split('.')[-1] == str("out"):
                             something['files'].append({'type':'mutect', 'path':str(full_path), 'source':DetectDataType(full_path)} )
                         else:
-                            print("unsure of what to do with " + str(full_path))
+                            print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
         json_dict['samples'].append(something)
     return json_dict
 
@@ -139,7 +141,7 @@ def main():
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
     parser.add_argument("-db", "--database", default=[], help="Comma separated list of known SNV databases in VCF format")
     parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names")
-    parser.add_argument("-d", "--project_directory", required=False, help="Project root directory, in which to find output")
+    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find output")
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow")
     parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
@@ -154,7 +156,8 @@ def main():
         bin.
         """)
     parser.add_argument("-jco", "--json_config_output", required=True, help="Name of JSON configuration file")   
-    parser.add_argument("-od", "--output_directory", required=True, help="Name of Mucor output directory")
+    parser.add_argument("-outd", "--output_directory", required=True, help="Name of Mucor output directory")
+    parser.add_argument("-outt", "--output_type", default="default", help="Comma separated list of disired output types: xls, bed, long ")
     args = parser.parse_args()
     if not os.path.exists(args.gff):
         abortWithMessage("Could not find GFF file {0}".format(args.gff))
@@ -170,6 +173,13 @@ def main():
     json_dict = thing(args, proj_dir)
     if os.path.exists(args.json_config_output):
         abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
+    if os.path.exists(args.output_directory) and os.listdir(args.output_directory):
+        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output_directory))
+    elif not os.path.exists(args.output_directory):
+        try:
+            os.makedirs(args.output_directory)
+        except:
+            abortWithMessage("Error when creating output directory {0}".format(args.output_directory))
     output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")
     json.dump(json_dict, output_file, sort_keys=True, indent=4, ensure_ascii=True)
 

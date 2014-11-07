@@ -20,7 +20,7 @@ from collections import defaultdict
 import gzip
 import cPickle as pickle
 import pdb   #pdb.set_trace()
-
+import xlwt
 import xml.etree.ElementTree as ET
 import json
 
@@ -49,7 +49,7 @@ class Info:
     versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
     usage = """
 Usage:
-{0} [-h] | -g featurefile.gff -f feature_type [-u] -o <output_dir> <mutect001.txt mutect002.txt ... mutectNNN.txt>
+{0} [-h] | -g featurefile.gff -f feature_type [-u] -o <outputDir> <mutect001.txt mutect002.txt ... mutectNNN.txt>
 
 Flags:
     -h  Show this help
@@ -178,25 +178,26 @@ def parseJSON(json_config):
     global filename2samples
     filename2samples = {}
     JD = json.load(open(json_config,'r'))
-    featureType = JD['feature']
-    outputDir = JD['output_dir']  # TO DO: we need consistency between code and config file
-    union = JD['union']
-    fast = JD['fast']
-    gff = JD['gtf']
+    config.featureType = JD['feature']
+    config.outputDir = JD['outputDir']
+    config.union = JD['union']
+    config.fast = JD['fast']
+    config.gff = JD['gtf']
+    config.outputFormats = JD['outputFormats']
     if str(JD['database']) == str("[u'[]']"):
-        database = []
+        config.database = []
     else:
-        database = JD['database']
-    filters = JD['filters']
+        config.database = JD['database']
+    config.filters = JD['filters']
     global database_switch
-    database_switch = bool(database)
+    database_switch = bool(config.database)
     global SnpEff_switch
     SnpEff_switch = False
     '''
     for i in JD['filters']:
         filters[i] = True      # Imagine filters as "ON/OFF", binary switches
     '''
-    input_files = []
+    config.inputFiles = []
     for i in JD['samples']:
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
@@ -208,17 +209,20 @@ def parseJSON(json_config):
             '''
             if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
                 SnpEff_switch = bool(True)
-            input_files.append(j['path'])
-    
-    config.feature = featureType
-    config.output_dir = outputDir
+            config.inputFiles.append(j['path'])
+    '''
+    config.featureType = featureType
+    config.outputDir = outputDir
     config.union = union
     config.fast = fast
     config.gff = gff
+    config.database = database
     config.filters = filters
-    config.input_files = input_files
+    config.inputFiles = inputFiles
+    config.outputFormats = outputFormats
+    '''
 
-    return featureType, outputDir, union, fast, gff, database, filters, input_files, config
+    return config #featureType, outputDir, union, fast, gff, database, filters, inputFiles, 
 
 def parseGffFile(gffFileName, featureType, fast):
     '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
@@ -568,7 +572,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
             var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
             ###########################################
-
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
             if resultSet:                   # which I'll use as a key on the knownFeatures dict
@@ -633,7 +636,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
     varDF.pos = varDF.pos.astype(int)
     return varDF, knownFeatures, gas 
 
-def printRunInfo(argv, outputDirName):
+def printRunInfo(config, outputDirName):
     try: 
         ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
     except:
@@ -642,13 +645,31 @@ def printRunInfo(argv, outputDirName):
     # run_info.txt
     #
     ofRunInfo.write(Info.versionInfo + '\n')
-    ofRunInfo.write("{0}\n".format(time.ctime() ) )
-    ofRunInfo.write("Command line: {0}\n".format(str(argv) ) )
-    ofRunInfo.write("No. samples: \n")
-    ofRunInfo.write("Filters:\n")
-    #
+    ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
+    ofRunInfo.write("No. samples: {0}\n\n".format(str(len(config.inputFiles))))
+    ofRunInfo.write("JSON Options:\n")
+    ofRunInfo.write("\tFeature Type: {0}\n".format(str(config.featureType)))
+    ofRunInfo.write("\tOutput Dir: {0}\n".format(str(config.outputDir)))
+    ofRunInfo.write("\tUnion: {0}\n".format(str(config.union)))
+    ofRunInfo.write("\tFast: {0}\n".format(str(config.fast)))
+    ofRunInfo.write("\tAnnotation: {0}\n".format(str(config.gff)))
+    ofRunInfo.write("\tDatabase(s): \n")
+    for i in config.database:
+        ofRunInfo.write("\t\t{0}\n".format(str(i)))
+    ofRunInfo.write("\tFilter(s): \n")
+    for i in config.filters:
+        ofRunInfo.write("\t\t{0}\n".format(str(i)))
+    ofRunInfo.write("\tInput Files: \n")
+    for i in config.inputFiles:
+        ofRunInfo.write("\t\t{0}\n".format(str(i)))
+    ofRunInfo.write("\tOutput Formats: \n")
+    for i in config.outputFormats:
+        ofRunInfo.write("\t\t{0}\n".format(str(i)))
+
+    '''
     ofRunInfo.write("Variants Pre-filter: \n")
     ofRunInfo.write("        Post-filter: \n")
+    '''
     ofRunInfo.close()
 
 def printCounts(outputDirName, knownFeatures):
@@ -747,6 +768,176 @@ def printVariantDetails(outputDirName, knownFeatures, varDF):
     ofVariantDetails.close()
     print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
 
+def printVariantDetailsXLS(outputDirName, knownFeatures, varDF):
+    '''
+    try:
+        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    '''
+    # =========================================================
+    # variant_details.txt
+    #
+    workbook = xlwt.Workbook()
+    ofVariantDetails = workbook.add_sheet('Variant Details')
+    nrow = 0
+    ncol = 0
+    for column in ['Feature', 'Contig', 'Pos', 'Ref', 'Alt', 'VF', 'DP']:
+        ofVariantDetails.write(nrow, ncol, column)
+        ncol += 1
+    if SnpEff_switch:
+        for column in ['Effect', 'FC']:
+            ofVariantDetails.write(nrow, ncol, column)
+            ncol += 1
+    if database_switch:
+        ofVariantDetails.write(nrow, ncol, 'Annotation')
+    for column in ['Count','Source']:
+        ofVariantDetails.write(nrow, ncol, column)
+        ncol += 1
+    nrow += 1
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    
+
+    for feature in sortedList:
+        if knownFeatures[feature.name].variants:
+            for var in knownFeatures[feature.name].uniqueVariants():
+                ncol = 0
+                ofVariantDetails.write(nrow, ncol, str(feature.name))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.pos.chrom))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, int(var.pos.pos))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.ref))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.alt))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.frac))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.dp))
+                ncol += 1
+                
+                if SnpEff_switch:
+                    if str(var.eff) != str(''):
+                        ofVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
+                        ncol += 1
+                    else:
+                        ofVariantDetails.write(nrow, ncol, str('?'))
+                        ncol += 1
+                    if str(var.fc) != str(''):
+                        ofVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
+                        ncol += 1
+                    else:
+                        ofVariantDetails.write(nrow, ncol, str('?'))
+                        ncol += 1
+                if database_switch:
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
+                        ofVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0]) )
+                        ncol += 1
+                    else:
+                        tempdb = ""
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                            if str(i) not in str(tempdb):
+                                tempdb += str(i) + ","
+                        ofVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
+                        ncol += 1
+                ofVariantDetails.write(nrow, ncol, int(str(len(var.source.split(',')))))
+                ncol += 1
+                ofVariantDetails.write(nrow, ncol, str(var.source))
+                ncol += 1
+                nrow += 1
+                
+        ########### Karl added bed file output here #############
+    workbook.save(outputDirName + '/variant_details.xls')
+    print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
+
+def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF):
+    '''
+    try:
+        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    '''
+    # =========================================================
+    # variant_details.txt
+    #
+    workbook = xlwt.Workbook()
+    ofLongVariantDetails = workbook.add_sheet('Long Variant Details')
+    nrow = 0
+    ncol = 0
+    for column in ['Feature', 'Contig', 'Pos', 'Ref', 'Alt', 'VF', 'DP']:
+        ofLongVariantDetails.write(nrow, ncol, column)
+        ncol += 1
+    if SnpEff_switch:
+        for column in ['Effect', 'FC']:
+            ofLongVariantDetails.write(nrow, ncol, column)
+            ncol += 1
+    if database_switch:
+        ofLongVariantDetails.write(nrow, ncol, 'Annotation')
+    for column in ['Count','Source']:
+        ofLongVariantDetails.write(nrow, ncol, column)
+        ncol += 1
+    nrow += 1
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    
+
+    for feature in sortedList:
+        if knownFeatures[feature.name].variants:
+            for var in knownFeatures[feature.name].uniqueVariants():
+                #pdb.set_trace()
+                for j in range(len(var.dp.split(','))):
+                    ncol = 0
+                    ofLongVariantDetails.write(nrow, ncol, str(feature.name))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, str(var.pos.chrom))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, int(var.pos.pos))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, str(var.ref))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, str(var.alt))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, float((var.frac).split(', ')[j]))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, int((var.dp).split(', ')[j]))
+                    ncol += 1
+                    
+                    if SnpEff_switch:
+                        if str(var.eff) != str(''):
+                            ofLongVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
+                            ncol += 1
+                        else:
+                            ofLongVariantDetails.write(nrow, ncol, str('?'))
+                            ncol += 1
+                        if str(var.fc) != str(''):
+                            ofLongVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
+                            ncol += 1
+                        else:
+                            ofLongVariantDetails.write(nrow, ncol, str('?'))
+                            ncol += 1
+                    if database_switch:
+                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
+                            ofLongVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0]) )
+                            ncol += 1
+                        else:
+                            tempdb = ""
+                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                                if str(i) not in str(tempdb):
+                                    tempdb += str(i) + ","
+                            ofLongVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
+                            ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, int(len(var.source.split(','))))
+                    ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, str(var.source.split(', ')[j]))
+                    ncol += 1
+                    nrow += 1
+                
+        ########### Karl added bed file output here #############
+    workbook.save(outputDirName + '/long_variant_details.xls')
+    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), nrow))
+
 def printVariantBed(outputDirName, knownFeatures):
     try:
         ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
@@ -771,17 +962,32 @@ def printVariantBed(outputDirName, knownFeatures):
     ofVariantBeds.close()
     print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
 
-def printOutput(argv, outputDirName, knownFeatures, gas, varDF): ######## Karl Modified ##############
+def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF): ######## Karl Modified ##############
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
 
     # TODO: pull output options from json file (config class) and put if statements here to selectively output
-    printRunInfo(argv, outputDirName)
-    printCounts(outputDirName, knownFeatures)
-    printVariantDetails(outputDirName, knownFeatures, varDF)
-    printVariantBed(outputDirName, knownFeatures)
+    outputFormatsDict = defaultdict(bool)
+    for format in outputFormats:
+        outputFormatsDict[format] = bool(True)
+
+    printRunInfo(config, outputDirName)
+    if outputFormatsDict['counts']:
+        printCounts(outputDirName, knownFeatures)
+    if outputFormatsDict['txt']:
+        printVariantDetails(outputDirName, knownFeatures, varDF)
+    if outputFormatsDict['bed']:
+        printVariantBed(outputDirName, knownFeatures)
+    if outputFormatsDict['xls']:
+        printVariantDetailsXLS(outputDirName, knownFeatures, varDF)
+    if outputFormatsDict['default']:
+        printVariantDetailsXLS(outputDirName, knownFeatures, varDF)
+        printVariantBed(outputDirName, knownFeatures)
+        printCounts(outputDirName, knownFeatures)
+    if outputFormatsDict['long']:
+        printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF)
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
@@ -795,34 +1001,27 @@ def main():
     print("\t{0}".format(time.ctime() ) )
     print()
 
-    featureType, outputDir, union, fast, gff, database, filters, input_files, config = parseJSON(sys.argv[1])
-    if not os.path.exists(gff):
-        abortWithMessage("Could not find GFF file {0}".format(gff))
-    if os.path.exists(outputDir) and os.listdir(outputDir):
-        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(outputDir))
-    elif not os.path.exists(outputDir):
+    config = parseJSON(sys.argv[1])
+
+    if not os.path.exists(config.gff):
+        abortWithMessage("Could not find GFF file {0}".format(config.gff))
+    if os.path.exists(config.outputDir) and os.listdir(config.outputDir):
+        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(config.outputDir))
+    elif not os.path.exists(config.outputDir):
         try:
-            os.makedirs(outputDir)
+            os.makedirs(config.outputDir)
         except:
-            abortWithMessage("Error when creating output directory {0}".format(outputDir))
+            abortWithMessage("Error when creating output directory {0}".format(config.outputDir))
 
     # check that all specified variant files exist
-    for fn in input_files:
+    for fn in config.inputFiles:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
 
+    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
-    knownFeatures, gas = parseGffFile(str(gff), str(featureType), bool(fast))
-
-    #snps =  load_db(database) ######## Karl Modified ##############
-    '''
-    outsnps = open('outsnps.p','rb')
-    pickle.dump(snps,outsnps)
-    outsnps.close()
-    abortWithMessage("done making snps dict")
-    '''
-    varDF, knownFeatures, gas = parseVariantFiles(list(input_files), knownFeatures, gas, database, filters)
-    printOutput(list(input_files), str(outputDir), knownFeatures, gas, varDF) ######## Karl Modified ##############
+    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.database, config.filters)
+    printOutput(config, str(config.outputDir), config.outputFormats, knownFeatures, gas, varDF) ######## Karl Modified ##############
     
     ## ## ##
     # print record format (long format) all variants data frame
@@ -841,8 +1040,8 @@ def main():
     
     # FUTURE: all output taken care of with below
     # ow = output.writer()
-    # for format in config.output_formats
-    #   ow.write(df, format, config.output_dir) #<-output_dir or whtever, double check
+    # for format in config.outputFormats
+    #   ow.write(df, format, config.outputDir) #<-outputDir or whtever, double check
 
     # >>>>>>>>> JAMES' OUTPUT FUNCTION  <<<<<<<<<<<
     # ow = output.writer()
