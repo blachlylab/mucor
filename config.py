@@ -18,3 +18,4 @@ class Config(object):
             samples = []
             inputFiles = []    # derived from samples
             database = []
+            regions = []

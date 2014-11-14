@@ -20,8 +20,11 @@ from config import Config
 cwd = os.getcwd()
 
 def abortWithMessage(message, help = False):
-        print("*** FATAL ERROR: " + message + " ***")
-        exit(2)
+    print("*** FATAL ERROR: " + message + " ***")
+    exit(2)
+
+def throwWarning(message, help = False):
+    print("*** WARNING: " + message + " ***")
 
 def str_to_bool(s):
     if str(s) == 'False':
@@ -30,6 +33,8 @@ def str_to_bool(s):
         return True
 
 def DetectDataType(fn):
+    #if str(fn).split('.')[-1].strip().lower() == str("maf"):
+        #return "MAF"
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
     row = varReader.next()
@@ -64,7 +69,10 @@ def DetectDataType(fn):
 def DetectSnpEffStatus(fn):
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
-    row = varReader.next()
+    try:
+        row = varReader.next()
+    except StopIteration:
+        abortWithMessage("Empty File: " + str(fn))
     while str(row).split("'")[1][0:2] == '##':
         if str('SnpEff') in str(row): 
             return True
@@ -109,6 +117,15 @@ def thing(args, proj_dir):
         if i:
             outFilters.add(i)
     json_dict['filters'] = [x for x in outFilters]
+    json_dict['regions'] = []
+    if args.regions:
+        for i in str(args.regions).split(','):
+            if str(i.split('.')[-1]).lower() == "bed":
+                json_dict['regions'].append(os.path.expanduser(i))
+            elif str(i.split(':')[0]).startswith('chr'):
+                json_dict['regions'].append(i)
+            else:
+                abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
     json_dict['database'] = []
     for i in str(args.database).split(','):
         json_dict['database'].append(os.path.expanduser(i))
@@ -131,12 +148,24 @@ def thing(args, proj_dir):
                             something['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':DetectDataType(full_path)} )
                         elif str(i).split('.')[-1] == str("out"):
                             something['files'].append({'type':'mutect', 'path':str(full_path), 'source':DetectDataType(full_path)} )
+                        elif str(i).split('.')[-1].lower() == str("maf"):
+                            something['files'].append({'type':'maf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
+                        elif str(i).split('.')[-1].lower() == str("gvf"):
+                            something['files'].append({'type':'gvf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
                         else:
                             print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
         json_dict['samples'].append(something)
     return json_dict
 
+def inconsistentFilesPerSample(json_dict):
+    numset = set()
+    for sample in json_dict['samples']:
+        numset.add(len(sample['files']))
+    if len(numset) > 1:
+        return True
+
 def main():
+    print
     parser = argparse.ArgumentParser()
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
     parser.add_argument("-db", "--database", default=[], help="Comma separated list of known SNV databases in VCF format")
@@ -145,6 +174,7 @@ def main():
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow")
     parser.add_argument("-n", "--no_archive", action="store_false", default=True, help="prevent quick load of annotation files")
+    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions OR bed files")
     parser.add_argument("-u", "--union", action="store_true", help="""
         Join all items with same ID for feature_type (specified by -f)
         into a single, continuous bin. For example, if you want intronic
@@ -171,6 +201,11 @@ def main():
     else:
         proj_dir = args.project_directory
     json_dict = thing(args, proj_dir)
+    if inconsistentFilesPerSample(json_dict):
+        throwWarning("Inconsistent number of files per sample")
+        print("File #\tSample ID")
+        for sample in json_dict['samples']:
+            print( str(len(sample['files'])) + "\t" + str(sample['id']) )
     if os.path.exists(args.json_config_output):
         abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
     if os.path.exists(args.output_directory) and os.listdir(args.output_directory):
@@ -182,6 +217,7 @@ def main():
             abortWithMessage("Error when creating output directory {0}".format(args.output_directory))
     output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")
     json.dump(json_dict, output_file, sort_keys=True, indent=4, ensure_ascii=True)
+    print
 
 if __name__ == "__main__":
 	main()

@@ -122,6 +122,13 @@ def str_to_bool(s):
     else:
         return True
 
+def is_int(term):
+    try:
+        if int(term):
+            return True
+    except:
+        return False 
+
 ######## Karl Modified ##############
 # new, separate function to construct the genomic array of sets
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
@@ -188,6 +195,10 @@ def parseJSON(json_config):
         config.database = []
     else:
         config.database = JD['database']
+    if str(JD['regions']) == str("[u'[]']"):
+        config.regions = []
+    else:
+        config.regions = JD['regions']
     config.filters = JD['filters']
     global database_switch
     database_switch = bool(config.database)
@@ -199,6 +210,7 @@ def parseJSON(json_config):
     '''
     config.inputFiles = []
     for i in JD['samples']:
+        config.samples.append(i)
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
             filename2samples[filename] = i['id']
@@ -280,6 +292,16 @@ def parseGffFile(gffFileName, featureType, fast):
     print("{0} sec\t{1} found:\t{2}".format(int(totalTime), featureType, len(knownFeatures)))
 
     return knownFeatures, gas
+
+def parseRegionBed(regionfile, regionDictIn):
+    regionDict = regionDictIn
+    for line in open(regionfile,'r'):
+        col = line.split('\t')
+        chrom = col[0]
+        start = col[1]
+        end = col[2]
+        regionDict[chrom].add((start,end))
+    return regionDict
 
 def parse_MiSeq(row, fieldId, header):
     VF = row[fieldId[header[-1]]].split(':')[-2]
@@ -427,21 +449,62 @@ def parse_FreeBayes(row, fieldId, header):
     VF = float( float(AO)/float(AO + RO) )
     return VF, DP, position
 
-def filterRow(row, fieldId, filters):
-    try:
+def parse_MAF(row, fieldId, header):
+    position = int(str(row[fieldId['Start_position']]).split('.')[0]) # case sensitive. what if, 'Start_Position' instead? 
+    DP = int(str(row[fieldId['TTotCov']]).split('.')[0])
+    VF = float( float(row[fieldId['TVarCov']])/float(DP) )
+    chrom = str(row[fieldId['Chromosome']])
+    ref =  str(row[fieldId['Reference_Allele']])
+    alt = str(row[fieldId['Tumor_Seq_Allele2']])
+    if ref == "-":
+        ref = ""
+    if alt == "-":
+        alt = ""
+    return VF, DP, position, chrom, ref, alt
+'''
+def parse_GVF(row, fieldId, header):
+    position = 
+'''
+def filterRow(row, fieldId, filters, kind):
+    '''
+    returning True means this row will be filtered out [masked]
+    returning False means the row will not be filtered out [pass filter]
+    '''
+    if str(kind) == "vcf":
         for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
             if rowFilter not in filters:
                 return True
                 break
-    except KeyError:
+    if str(kind) == "out":
         for rowFilter in str(row[fieldId['judgement']]).split(';'): ## MuTect '.out' file format
             if rowFilter not in filters:
                 return True
                 break
     return False
+'''
+def inRegion(chrom, start, end, region):
+    region_chrom = region.split(':')[0]
+    try:
+        region_locs = region.split(':')[1]
+        region_start = region_locs.split('-')[0]
+        region_end = region_locs.split('-')[1]
+        if str(chrom) == str(region_chrom) and int(start) >= int(region_start) and int(end) <= int(region_end):
+            return True
+    except IndexError:
+        if str(chrom) == str(region_chrom):
+            return True
+    return False
+'''
+
+def inRegionDict(chrom, start, end, regionDict):
+    if regionDict[chrom]:
+        for locs in regionDict[chrom]:
+            if int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
+                return True
+    return False
 
 def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
-    if len(ref) != len(alt):
+    if len(var.ref) != len(var.alt):
         for kvar in knownFeatures[featureName].variants:
             if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)) == str(indelDelta(kvar.ref, kvar.alt)):
                 return True, kvar.ref, kvar.alt
@@ -455,19 +518,35 @@ def indelDelta(ref, alt):
     elif len(alt) < len(ref):           # deletion
         return ref.replace(alt,"",1)
     else:                               # SNP / MNP
-        print("this is a snp")
+        # there is already a SNP at this indel location 
+        return ""
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters): 
+def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regions): 
     # parse the variant files (VCF, muTect format)
     startTime = time.clock()
 
     # All variants stored in long (record) format
     # in a pandas dataframe
     varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
+    
+    if regions: # has the user specified any particular regions or region files to focus on?
+        regionDict = defaultdict(set)
+        for item in regions:
+            if str(str(item).split('.')[-1]).lower() == 'bed':      # this item is a bed file
+                regionDict = parseRegionBed(item, regionDict)
+            elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
+                reg_chr = str(item.split(':')[0])
+                try:
+                    reg_str = str(str(item.split(':')[1]).split('-')[0])
+                    reg_end = str(str(item.split(':')[1]).split('-')[1])
+                except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
+                    reg_str = 0
+                    reg_end = 0
+                regionDict[reg_chr].add((reg_str, reg_end))
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
-
+        kind = str(str(fn).split('.')[-1].strip().lower())
         varFile = open(fn, 'rb')    # TO DO: error handling
         varReader = csv.reader(varFile, delimiter='\t')
 
@@ -497,7 +576,17 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
         HapCaller = False
         global FreeBayes
         FreeBayes = False
-        while str(row).split("'")[1][0:2] == '##':
+        global MAF
+        MAF = False
+        global GVF
+        GVF = False
+        if str(fn.split('.')[-1].strip()).lower() == 'maf':
+            MAF = True
+            while str(row[0]).startswith('#'):
+                row = varReader.next()
+        if str(fn.split('.')[-1].strip()).lower() == 'gvf':
+            GVF = True
+        while str(row).split("'")[1][0:2] == '##': 
             if str('Torrent Unified Variant Caller') in str(row): 
                 IonTorrent = True
             elif str('MiSeq') in str(row):
@@ -523,10 +612,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
         fieldId = dict(zip(header, range(0, len(header))))
 
         # read coverage depth minimum cutoff; currently unusued
-        read_depth_min = 0
+        #read_depth_min = 0
         # after reading the two header rows, read data
         for row in itertools.islice(varReader, None):
-            if filterRow(row, fieldId, filters):    # filter rows as they come in, to prevent them from entering the dataframe
+            if filterRow(row, fieldId, filters, kind):    # filter rows as they come in, to prevent them from entering the dataframe
                 continue                            # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
 
             # make a variant object for row
@@ -552,25 +641,59 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
                 pass
             if MiSeq:
                 VF, DP, position = parse_MiSeq(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif IonTorrent:
                 VF, DP, position = parse_IonTorrent(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif Mutect:
                 VF, DP, position = parse_MuTectVCF(row, fieldId, header, fn) # , MuTect_Annotations)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif SomaticIndelDetector:
                 VF, DP, position = parse_SomaticIndelDetector(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif Mutector:
                 VF, DP, position = parse_MuTectOUT(row, fieldId) # , MuTect_Annotations)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif Samtools:
                 VF, DP, position = parse_SamTools(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif VarScan:
                 VF, DP, position = parse_VarScan(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif HapCaller:
                 VF, DP, position = parse_HapCaller(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
             elif FreeBayes:
                 VF, DP, position = parse_FreeBayes(row, fieldId, header)
+                chrom = row[0]
+                ref = row[3]
+                alt = row[4]
+            elif MAF:
+                VF, DP, position, chrom, ref, alt = parse_MAF(row, fieldId, header)
+
             else:
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
-            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(row[0], int(position)), ref=row[3], alt=row[4], frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
+            if is_int(chrom):
+                chrom = str("chr" + str(chrom))
+            if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
+                continue
+            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
             ###########################################
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
@@ -588,10 +711,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters):
                     knownFeatures[featureName].variants.add(var)
             
             # Descriptive variable names
-            chr = row[0]
+            chr = chrom
             pos = int(position)
-            ref = row[3]
-            alt = row[4]
+            #ref = row[3]
+            #alt = row[4]
             vf = VF     # to do, change (karl capitalizes)
             dp = DP     # to do, change (karl capitalizes)
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
@@ -708,7 +831,7 @@ def printCounts(outputDirName, knownFeatures):
     print("\t{0}: {1} rows".format(ofCounts.name, nrow))
     ofCounts.close()
 
-def printVariantDetails(outputDirName, knownFeatures, varDF):
+def printVariantDetails(outputDirName, knownFeatures, varDF, total):
     try:
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
     except:
@@ -723,7 +846,7 @@ def printVariantDetails(outputDirName, knownFeatures, varDF):
         ofVariantDetails.write('Effect\tFC\t')
     if database_switch:
         ofVariantDetails.write('Annotation\t')
-    ofVariantDetails.write('Count\tSource\n')
+    ofVariantDetails.write('Count\tFrequency\tSource\n')
 
     masterList = list(knownFeatures.values())
     sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
@@ -761,6 +884,7 @@ def printVariantDetails(outputDirName, knownFeatures, varDF):
                                 tempdb += str(i) + ","
                         ofVariantDetails.write(tempdb.strip(',') + '\t')
                 ofVariantDetails.write(str(len(var.source.split(','))) + '\t')
+                ofVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + '\t' )
                 ofVariantDetails.write(var.source + '\n')
                 nrow += 1
                 
@@ -768,7 +892,7 @@ def printVariantDetails(outputDirName, knownFeatures, varDF):
     ofVariantDetails.close()
     print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
 
-def printVariantDetailsXLS(outputDirName, knownFeatures, varDF):
+def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
     try:
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
@@ -791,7 +915,8 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF):
             ncol += 1
     if database_switch:
         ofVariantDetails.write(nrow, ncol, 'Annotation')
-    for column in ['Count','Source']:
+        ncol += 1
+    for column in ['Count','Frequency','Source']:
         ofVariantDetails.write(nrow, ncol, column)
         ncol += 1
     nrow += 1
@@ -844,6 +969,8 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF):
                         ncol += 1
                 ofVariantDetails.write(nrow, ncol, int(str(len(var.source.split(',')))))
                 ncol += 1
+                ofVariantDetails.write(nrow, ncol, float(float(len(var.source.split(',')))/float(total))  )
+                ncol += 1
                 ofVariantDetails.write(nrow, ncol, str(var.source))
                 ncol += 1
                 nrow += 1
@@ -852,7 +979,7 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF):
     workbook.save(outputDirName + '/variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
 
-def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF):
+def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
     try:
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
@@ -875,7 +1002,8 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF):
             ncol += 1
     if database_switch:
         ofLongVariantDetails.write(nrow, ncol, 'Annotation')
-    for column in ['Count','Source']:
+        ncol += 1
+    for column in ['Count','Frequency','Source']:
         ofLongVariantDetails.write(nrow, ncol, column)
         ncol += 1
     nrow += 1
@@ -930,6 +1058,8 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF):
                             ncol += 1
                     ofLongVariantDetails.write(nrow, ncol, int(len(var.source.split(','))))
                     ncol += 1
+                    ofLongVariantDetails.write(nrow, ncol, float(float(len(var.source.split(',')))/float(total))  )
+                    ncol += 1
                     ofLongVariantDetails.write(nrow, ncol, str(var.source.split(', ')[j]))
                     ncol += 1
                     nrow += 1
@@ -972,22 +1102,22 @@ def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF)
     outputFormatsDict = defaultdict(bool)
     for format in outputFormats:
         outputFormatsDict[format] = bool(True)
-
+    total = len(config.samples)                 # used in frequency calculation. config.samples will use sample count as the denominator. samples.inputFiles will use file count
     printRunInfo(config, outputDirName)
     if outputFormatsDict['counts']:
         printCounts(outputDirName, knownFeatures)
     if outputFormatsDict['txt']:
-        printVariantDetails(outputDirName, knownFeatures, varDF)
+        printVariantDetails(outputDirName, knownFeatures, varDF, total)
     if outputFormatsDict['bed']:
         printVariantBed(outputDirName, knownFeatures)
     if outputFormatsDict['xls']:
-        printVariantDetailsXLS(outputDirName, knownFeatures, varDF)
+        printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
     if outputFormatsDict['default']:
-        printVariantDetailsXLS(outputDirName, knownFeatures, varDF)
+        printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
         printVariantBed(outputDirName, knownFeatures)
         printCounts(outputDirName, knownFeatures)
     if outputFormatsDict['long']:
-        printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF)
+        printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
@@ -1020,7 +1150,7 @@ def main():
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
-    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.database, config.filters)
+    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.database, config.filters, config.regions)
     printOutput(config, str(config.outputDir), config.outputFormats, knownFeatures, gas, varDF) ######## Karl Modified ##############
     
     ## ## ##

@@ -106,6 +106,9 @@ def isAnnotatedSNP(snps, loc):
 		return bool(False)
 '''
 def isAnnotatedSNP(var, dbs):
+	chrom = str(var.pos.chrom)
+	'''
+	old int tabix: 
 	try:
 		chrom = int(str(var.pos.chrom).strip('chr'))
 	except:
@@ -113,6 +116,7 @@ def isAnnotatedSNP(var, dbs):
 			chrom = int(23)
 		elif str(var.pos.chrom).strip('chr') == "Y":
 			chrom = int(24)
+	'''
 	try:
 		chrom
 	except:
@@ -120,8 +124,8 @@ def isAnnotatedSNP(var, dbs):
 		#     This includes chrM and alternative contigs
 		return False, str('?')
 		pass
-	spos = int(var.pos.pos - 1)
-	epos = int(var.pos.pos)
+	spos = int(var.pos.pos - 1)		# start position
+	epos = int(var.pos.pos)			# end position
 	ref = var.ref
 	alt = var.alt
 	datab = ""
@@ -144,7 +148,8 @@ def isAnnotatedSNP(var, dbs):
 				row = database.readline()
 			tb = tabix.open(db)
 			if len(str(alt).split(',')) >= 1:
-				for row in tb.queryi(chrom, spos, epos):
+				#pdb.set_trace()
+				for row in tb.query(chrom, spos, epos):
 					if str(row[3]) == ref and str(row[4]) in str(alt).split(','):
 						datab += str(row[2]) + ", "
 	if str(datab) != "":
