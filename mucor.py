@@ -299,7 +299,7 @@ def parseGffFile(gffFileName, featureType, fast):
 def parseRegionBed(regionfile, regionDictIn):
     regionDict = regionDictIn
     for line in open(str(regionfile),'r'):
-        col = line.split('\t')
+        col = line.split("\t")
         chrom = col[0]
         start = col[1]
         end = col[2]
@@ -367,7 +367,7 @@ def parse_MuTectVCF(row, fieldId, header, fn):
         MuTect_output = fn.replace('_snpEff.vcf', '.out')
         for line in open(MuTect_output):
             if str(str(row[0]) + "\t") in str(line) and str(str(position) + "\t") in str(line):
-                MuTect_Annotations[tuple((str(row[0]), position))] = line.split('\t')[8]
+                MuTect_Annotations[tuple((str(row[0]), position))] = line.split("\t")[8]
                 break
             else:
                 continue
@@ -553,7 +553,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
     for fn in variantFiles:
         kind = str(str(fn).split('.')[-1].strip().lower())
         varFile = open(fn, 'rb')    # TO DO: error handling
-        varReader = csv.reader(varFile, delimiter='\t')
+        varReader = csv.reader(varFile, delimiter="\t")
 
         try:
             row = varReader.next()
@@ -772,7 +772,7 @@ def printRunInfo(config, outputDirName):
     # =========================
     # run_info.txt
     #
-    ofRunInfo.write(Info.versionInfo + '\n')
+    ofRunInfo.write(Info.versionInfo + "\n")
     ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
     ofRunInfo.write("No. samples: {0}\n\n".format(str(len(config.inputFiles))))
     ofRunInfo.write("JSON Options:\n")
@@ -817,19 +817,19 @@ def printCounts(outputDirName, knownFeatures):
 
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
-            ofCounts.write(feature.name + '\t')
+            ofCounts.write(feature.name + "\t")
 
-            ofCounts.write(str(len(knownFeatures[feature.name].variants)) + '\t')
+            ofCounts.write(str(len(knownFeatures[feature.name].variants)) + "\t")
             
-            ofCounts.write(str(knownFeatures[feature.name].weightedVariants()) + '\t')
+            ofCounts.write(str(knownFeatures[feature.name].weightedVariants()) + "\t")
             
             ft = knownFeatures[feature.name]
             avgWt = float(ft.weightedVariants() / float(ft.numVariants()) )
-            ofCounts.write(str(avgWt) + '\t')
+            ofCounts.write(str(avgWt) + "\t")
 
-            ofCounts.write(str(knownFeatures[feature.name].numUniqueVariants()) + '\t')
+            ofCounts.write(str(knownFeatures[feature.name].numUniqueVariants()) + "\t")
             
-            ofCounts.write(str(knownFeatures[feature.name].numUniqueSamples()) + '\n')
+            ofCounts.write(str(knownFeatures[feature.name].numUniqueSamples()) + "\n")
 
             nrow += 1
     
@@ -862,35 +862,35 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
             for var in knownFeatures[feature.name].uniqueVariants():
                 
                 #if not isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
-                ofVariantDetails.write(feature.name + '\t')
-                ofVariantDetails.write(var.pos.chrom + '\t')
-                ofVariantDetails.write(str(var.pos.pos) + '\t')
-                ofVariantDetails.write(var.ref + '\t')
-                ofVariantDetails.write(var.alt + '\t')
-                ofVariantDetails.write(var.frac + '\t')
-                ofVariantDetails.write(var.dp + '\t')
+                ofVariantDetails.write(feature.name + "\t")
+                ofVariantDetails.write(var.pos.chrom + "\t")
+                ofVariantDetails.write(str(var.pos.pos) + "\t")
+                ofVariantDetails.write(var.ref + "\t")
+                ofVariantDetails.write(var.alt + "\t")
+                ofVariantDetails.write(var.frac + "\t")
+                ofVariantDetails.write(var.dp + "\t")
                 
                 if SnpEff_switch:
                     if str(var.eff) != str(''):
-                        ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                        ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
                     else:
-                        ofVariantDetails.write(str('?') + '\t')
+                        ofVariantDetails.write(str('?') + "\t")
                     if str(var.fc) != str(''):
-                        ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + '\t')
+                        ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
                     else:
-                        ofVariantDetails.write(str('?') + '\t')
+                        ofVariantDetails.write(str('?') + "\t")
                 if database_switch:
                     if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + '\t') 
+                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
                     else:
                         tempdb = ""
                         for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
                             if str(i) not in str(tempdb):
                                 tempdb += str(i) + ","
-                        ofVariantDetails.write(tempdb.strip(',') + '\t')
-                ofVariantDetails.write(str(len(var.source.split(','))) + '\t')
-                ofVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + '\t' )
-                ofVariantDetails.write(var.source + '\n')
+                        ofVariantDetails.write(tempdb.strip(',') + "\t")
+                ofVariantDetails.write(str(len(var.source.split(','))) + "\t")
+                ofVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + "\t" )
+                ofVariantDetails.write(var.source + "\n")
                 nrow += 1
                 
         ########### Karl added bed file output here #############
@@ -1088,14 +1088,85 @@ def printVariantBed(outputDirName, knownFeatures):
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
-                ofVariantBeds.write(var.pos.chrom + '\t')
-                ofVariantBeds.write(str(var.pos.pos - 1) + '\t')
-                ofVariantBeds.write(str(var.pos.pos) + '\t')
-                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + '\t') # used to write dbSNP name in bed name field
-                ofVariantBeds.write('\n')
+                ofVariantBeds.write(var.pos.chrom + "\t")
+                ofVariantBeds.write(str(var.pos.pos - 1) + "\t")
+                ofVariantBeds.write(str(var.pos.pos) + "\t")
+                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + "\t") # used to write dbSNP name in bed name field
+                ofVariantBeds.write("\n")
                 nrow += 1
     ofVariantBeds.close()
     print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
+
+def getMetricsVCF(var, sourcefile):
+    n = 0
+    dp = 0
+    vf = 0
+    for source in str(var.source).split(', '):
+        if source == sourcefile:
+            dp = str(var.dp).split(', ')[n]
+            vf = str(var.frac).split(', ')[n]
+        else:
+            n += 1
+    if dp and vf:
+        return dp, vf
+    elif not dp and not vf:
+        return 0, 0
+    else:
+        abortWithMessage("There should be a depth AND variant frequency for this mutation. One is missing.")
+
+
+def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
+    try:
+        ofBigVCF = open(outputDirName + "/variant_calls.vcf", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    # =========================================================
+    # variant_calls.vcf
+    #    
+    ofBigVCF.write("##fileformat=VCFv4.1\n")
+    ofBigVCF.write('##FORMAT=<ID=DP,Type=Float,Description="Depth of read coverage">\n')
+    ofBigVCF.write('##FORMAT=<ID=VF,Type=Float,Description="Fraction of reads displaying alternative allele">\n')
+    ofBigVCF.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t")
+    for inFile in inputFiles:
+        ofBigVCF.write(inFile.split('/')[-1] + "\t")
+    ofBigVCF.write("\n")
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    nrow = 0
+
+    for feature in sortedList:
+        if knownFeatures[feature.name].variants:
+            for var in knownFeatures[feature.name].uniqueVariants():
+                ofBigVCF.write(str(var.pos.chrom) + "\t" + str(var.pos.pos) + "\t")
+                if database_switch:
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
+                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
+                    else:
+                        tempdb = ""
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                            if str(i) not in str(tempdb):
+                                tempdb += str(i) + ";"
+                        ofVariantDetails.write(tempdb.strip(';') + "\t")
+                else:
+                    ofBigVCF.write(str(".") + "\t")
+                if var.ref:
+                    ofBigVCF.write(str(var.ref) + "\t") 
+                else:
+                    ofBigVCF.write("." + "\t")
+                if var.alt:
+                    ofBigVCF.write(str(var.alt) + "\t")
+                else:
+                    ofBigVCF.write("." + "\t")
+
+                ofBigVCF.write("." + "\t" + "." + "\t" + "." + "\t" + "DP:VF" + "\t")
+                for source in inputFiles:
+                    dp, vf = getMetricsVCF(var, source.split('/')[-1])
+                    ofBigVCF.write(str(dp) + ":" + str(vf) + "\t")
+                ofBigVCF.write("\n")
+                nrow += 1
+    ofBigVCF.close()
+    print("\t{0}: {1} rows".format(ofBigVCF.name, nrow))
+
 
 def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF): ######## Karl Modified ##############
     '''Output statistics and variant details to the specified output directory.'''
@@ -1123,6 +1194,8 @@ def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF)
         printCounts(outputDirName, knownFeatures)
     if outputFormatsDict['long']:
         printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
+    if outputFormatsDict['vcf']:
+        printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
@@ -1171,7 +1244,7 @@ def main():
     # so we will sort by feature (gene etc.) then position
     ##varDF.sort(columns=['feature','pos'], inplace=True)
     ##varDF.replace('', np.nan, inplace=True)
-    ##varDF.to_csv(outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
+    ##varDF.to_csv(outputDir + '/allvars.txt', sep="\t", na_rep='?', index=False)
     
     # FUTURE: all output taken care of with below
     # ow = output.writer()

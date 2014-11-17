@@ -142,7 +142,7 @@ def thing(args, proj_dir):
         json_dict['database'].append(os.path.expanduser(i))
     json_dict['outputFormats'] = []
     for i in str(args.output_type).split(','):
-        json_dict['outputFormats'].append(i)
+        json_dict['outputFormats'].append(str(i).lower())
     for id in open(args.samples):
         sid = id.strip()
         if str(sid) == "":
