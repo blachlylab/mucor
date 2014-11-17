@@ -209,8 +209,9 @@ def parseJSON(json_config):
         filters[i] = True      # Imagine filters as "ON/OFF", binary switches
     '''
     config.inputFiles = []
+    config.samples = []
     for i in JD['samples']:
-        config.samples.append(i)
+        config.samples.append(i['id'])
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
             filename2samples[filename] = i['id']
@@ -1102,7 +1103,7 @@ def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF)
     outputFormatsDict = defaultdict(bool)
     for format in outputFormats:
         outputFormatsDict[format] = bool(True)
-    total = len(config.samples)                 # used in frequency calculation. config.samples will use sample count as the denominator. samples.inputFiles will use file count
+    total = len(set(config.samples))                # used in frequency calculation. config.samples will use sample count as the denominator. samples.inputFiles will use file count
     printRunInfo(config, outputDirName)
     if outputFormatsDict['counts']:
         printCounts(outputDirName, knownFeatures)
