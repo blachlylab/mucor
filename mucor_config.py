@@ -120,10 +120,21 @@ def thing(args, proj_dir):
     json_dict['regions'] = []
     if args.regions:
         for i in str(args.regions).split(','):
+            ## TO-DO: break these file/region checks out into separate, "isProperRegion" function(s)
             if str(i.split('.')[-1]).lower() == "bed":
-                json_dict['regions'].append(os.path.expanduser(i))
-            elif str(i.split(':')[0]).startswith('chr'):
-                json_dict['regions'].append(i)
+                if os.path.isfile(str(i)):
+                    json_dict['regions'].append(os.path.expanduser(str(i)))
+                else:
+                    abortWithMessage("BED file {0} cannot be found".format(str(i)))
+            elif str(str(i).split(':')[0]).startswith('chr') and str(str(i).split(':')[0]) != "chr":
+                try:                                    # does the input region have valid start and ends?
+                    int(str(str(i).split(':')[1])[0])
+                    int(str(str(i).split(':')[1])[1])
+                    json_dict['regions'].append(i)
+                except ValueError:                      # start and/or end are invalid
+                    abortWithMessage("Region {0} is not valid. Follow standard convention, Ex: chr1:100-300".format(str(i)))
+                except IndexError:                      # only chromosome was defined. this is permitted (whole chromosome region)
+                    json_dict['regions'].append(i)
             else:
                 abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
     json_dict['database'] = []

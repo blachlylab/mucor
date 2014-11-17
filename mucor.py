@@ -195,15 +195,17 @@ def parseJSON(json_config):
         config.database = []
     else:
         config.database = JD['database']
-    if str(JD['regions']) == str("[u'[]']"):
-        config.regions = []
-    else:
+    if str(JD['regions']):
         config.regions = JD['regions']
+    else:
+        config.regions = []
+        
     config.filters = JD['filters']
     global database_switch
     database_switch = bool(config.database)
     global SnpEff_switch
     SnpEff_switch = False
+
     '''
     for i in JD['filters']:
         filters[i] = True      # Imagine filters as "ON/OFF", binary switches
@@ -296,7 +298,7 @@ def parseGffFile(gffFileName, featureType, fast):
 
 def parseRegionBed(regionfile, regionDictIn):
     regionDict = regionDictIn
-    for line in open(regionfile,'r'):
+    for line in open(str(regionfile),'r'):
         col = line.split('\t')
         chrom = col[0]
         start = col[1]
@@ -500,7 +502,9 @@ def inRegion(chrom, start, end, region):
 def inRegionDict(chrom, start, end, regionDict):
     if regionDict[chrom]:
         for locs in regionDict[chrom]:
-            if int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
+            if locs[0] == 0 and locs[1] == 0:
+                return True
+            elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
                 return True
     return False
 
