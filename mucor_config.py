@@ -107,7 +107,7 @@ def thing(args, proj_dir):
 # TO DO : Pull these dictionary values from the 'Config' class variables for consistency
     json_dict = defaultdict()
     json_dict['outputDir'] = str(args.output_directory).split('/')[-1]
-    json_dict['gtf'] = str(args.gff)
+    json_dict['gff'] = str(args.gff)
     json_dict['union'] = bool(args.union)
     json_dict['fast'] = bool(args.no_archive)
     json_dict['feature'] = str(args.featuretype)

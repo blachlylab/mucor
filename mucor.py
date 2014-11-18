@@ -196,7 +196,7 @@ def parseJSON(json_config):
     config.outputDir = JD['outputDir']
     config.union = JD['union']
     config.fast = JD['fast']
-    config.gff = JD['gtf']
+    config.gff = JD['gff']
     config.outputFormats = JD['outputFormats']
     if str(JD['database']) == str("[u'[]']"):
         config.database = []
@@ -781,26 +781,8 @@ def printRunInfo(config, outputDirName):
     #
     ofRunInfo.write(Info.versionInfo + "\n")
     ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
-    ofRunInfo.write("No. samples: {0}\n\n".format(str(len(config.inputFiles))))
-    ofRunInfo.write("JSON Options:\n")
-    ofRunInfo.write("\tFeature Type: {0}\n".format(str(config.featureType)))
-    ofRunInfo.write("\tOutput Dir: {0}\n".format(str(config.outputDir)))
-    ofRunInfo.write("\tUnion: {0}\n".format(str(config.union)))
-    ofRunInfo.write("\tFast: {0}\n".format(str(config.fast)))
-    ofRunInfo.write("\tAnnotation: {0}\n".format(str(config.gff)))
-    ofRunInfo.write("\tDatabase(s): \n")
-    for i in config.database:
-        ofRunInfo.write("\t\t{0}\n".format(str(i)))
-    ofRunInfo.write("\tFilter(s): \n")
-    for i in config.filters:
-        ofRunInfo.write("\t\t{0}\n".format(str(i)))
-    ofRunInfo.write("\tInput Files: \n")
-    for i in config.inputFiles:
-        ofRunInfo.write("\t\t{0}\n".format(str(i)))
-    ofRunInfo.write("\tOutput Formats: \n")
-    for i in config.outputFormats:
-        ofRunInfo.write("\t\t{0}\n".format(str(i)))
-
+    ofRunInfo.write(str(config))
+    
     '''
     ofRunInfo.write("Variants Pre-filter: \n")
     ofRunInfo.write("        Post-filter: \n")
