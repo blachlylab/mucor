@@ -40,7 +40,7 @@ from variant import Variant
 from mucorfeature import MucorFeature
 import output
 from config import Config
-from databases import load_db, isAnnotatedSNP 
+from databases import isAnnotatedSNP 
 
 class Info:
     '''Program info: logo, version, and usage'''
