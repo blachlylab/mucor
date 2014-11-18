@@ -54,6 +54,7 @@ class Info:
 """
     version = "0.17"
     versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
+    # usage needs to be updated, or eliminated if argparse can replace this function. 
     usage = """
 Usage:
 {0} [-h] | -g featurefile.gff -f feature_type [-u] -o <outputDir> <mutect001.txt mutect002.txt ... mutectNNN.txt>
@@ -123,12 +124,6 @@ def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
     exit(2)
 
-def str_to_bool(s):
-    if str(s) == 'False':
-        return False
-    else:
-        return True
-
 def is_int(term):
     try:
         if int(term):
@@ -136,8 +131,6 @@ def is_int(term):
     except:
         return False 
 
-######## Karl Modified ##############
-# new, separate function to construct the genomic array of sets
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     for feature in itertools.islice(gffFile, 0, None):
@@ -185,19 +178,24 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     return gas, knownFeatures, duplicateFeatures
 
 def parseJSON(json_config):
-    """"""
-    
+    """
+    Import the JSON config file from mucor_config.py. 
+    Reads the config file into a dictionary, then writes each dictionary entry into the respective Config class position.
+    """
     config = Config()
 
     global filename2samples
     filename2samples = {}
+    # load the json file into a dictionary, JD
     JD = json.load(open(json_config,'r'))
+    # write dictionary values into a more human-friendly config class
     config.featureType = JD['feature']
     config.outputDir = JD['outputDir']
     config.union = JD['union']
     config.fast = JD['fast']
     config.gff = JD['gff']
     config.outputFormats = JD['outputFormats']
+    # JSON dict represents empty database as a list of 1 unicode list. Cannot appropriately cast it as a bool, because it returns True. 
     if str(JD['database']) == str("[u'[]']"):
         config.database = []
     else:
@@ -206,17 +204,16 @@ def parseJSON(json_config):
         config.regions = JD['regions']
     else:
         config.regions = []
-        
+    # comma separated list of acceptable VCF filter column values
     config.filters = JD['filters']
     global database_switch
+    # if any databases are defined, switch the database_switch ON (True)
+    # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
     database_switch = bool(config.database)
     global SnpEff_switch
+    # works similar to database switch above.
     SnpEff_switch = False
 
-    '''
-    for i in JD['filters']:
-        filters[i] = True      # Imagine filters as "ON/OFF", binary switches
-    '''
     config.inputFiles = []
     config.samples = []
     for i in JD['samples']:
@@ -224,31 +221,17 @@ def parseJSON(json_config):
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
             filename2samples[filename] = i['id']
-            '''
-            if not MuTect_switch and str(j['source']) == str('Mutect') and str(j['type']) == str('mutect'):
-                MuTect_switch = bool(True)
-                pass
-            '''
             if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
                 SnpEff_switch = bool(True)
             config.inputFiles.append(j['path'])
-    '''
-    config.featureType = featureType
-    config.outputDir = outputDir
-    config.union = union
-    config.fast = fast
-    config.gff = gff
-    config.database = database
-    config.filters = filters
-    config.inputFiles = inputFiles
-    config.outputFormats = outputFormats
-    '''
 
-    return config #featureType, outputDir, union, fast, gff, database, filters, inputFiles, 
+    return config 
 
 def parseGffFile(gffFileName, featureType, fast):
-    '''Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
-    Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)'''
+    '''
+    Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
+    Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)
+    '''
     
     # TO DO: command line flag should indicate that variants in INTRONS are counted
     # This is called --union, see below
@@ -258,6 +241,7 @@ def parseGffFile(gffFileName, featureType, fast):
     
     scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
     annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
+    # pickled file is created for specific combinations of gff annotation and feature type. See below for more details. **
     archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
     print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
@@ -274,8 +258,14 @@ def parseGffFile(gffFileName, featureType, fast):
     # and if I manually coded all GenomicIntervals read from the VCF or muTect file as '+',
     # then no genes on the - strand would have variants binned to them
 
+    # Fast boolean determines whether the user wants to load a pickle file annotation that they made in a previous run
+    # The pickle file will load the genomic array of sets, known features, and duplicate features. 
+    # ** These three items will change depending on the supplied gff annotation AND the feature selected. 
+    #    Thus, each pickle file will be for a specific combination of gff and feature, hence the naming convention.
     if fast:
+        # user wants to use pickled annotations
         if os.path.exists( archiveFilePath ):
+            # using the existing, pickled annotation
             print("Opening annotation archive: " + str(archiveFilePath))
             pAnnot = open(archiveFilePath, 'rb')
             gas = pickle.load(pAnnot)
@@ -283,6 +273,7 @@ def parseGffFile(gffFileName, featureType, fast):
             duplicateFeatures = pickle.load(pAnnot)
             pAnnot.close()
         else:
+            # no pickled annotation exists for this combination of gff and feature; creating it in the same directory as this mucor.py file
             print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType))
             print("   Reading in annotation and saving archive for faster future runs") 
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
@@ -292,7 +283,7 @@ def parseGffFile(gffFileName, featureType, fast):
             pickle.dump(duplicateFeatures, archiveOut, -1)
             archiveOut.close()
     if not fast:
-    # ignore pickles function
+    # ignore pickles function entirely. Won't check for it and won't attempt to create it
         gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
 
     if duplicateFeatures:
@@ -304,6 +295,9 @@ def parseGffFile(gffFileName, featureType, fast):
     return knownFeatures, gas
 
 def parseRegionBed(regionfile, regionDictIn):
+    ''' 
+    Read through the supplied bed file and add the rows to the input region dictionary before returning it. Appends to the input dict, rather than overwriting it.
+    '''
     regionDict = regionDictIn
     for line in open(str(regionfile),'r'):
         col = line.split("\t")
@@ -348,9 +342,6 @@ def parse_MuTectOUT(row, fieldId):
     VF = row[fieldId['tumor_f']]
     DP = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
     position = int(row[fieldId['position']])
-    '''
-    MuTect_Annotations[tuple(( str(row[0]), position) )] = row[fieldId['dbsnp_site']]
-    '''
 
     return VF, DP, position 
     
@@ -366,35 +357,15 @@ def parse_MuTectVCF(row, fieldId, header, fn):
             DP = row[fieldId[tmpsampID]].split(':')[j]
         j+=1
     position = int(row[fieldId['POS']])
-    '''
-    global MuTect_switch
-    MuTect_switch = True
-    
-    if MuTect_switch == True and os.path.exists(fn.replace('_snpEff.vcf', '.out')) and str(fn.replace('_snpEff.vcf', '.out')) != str(fn):
-        MuTect_output = fn.replace('_snpEff.vcf', '.out')
-        for line in open(MuTect_output):
-            if str(str(row[0]) + "\t") in str(line) and str(str(position) + "\t") in str(line):
-                MuTect_Annotations[tuple((str(row[0]), position))] = line.split("\t")[8]
-                break
-            else:
-                continue
-    '''
 
     return VF, DP, position 
 
 def parse_SomaticIndelDetector(row, fieldId, header):
     j = 0
-    '''
-    #only works for samples with a dash (-) in them
-    for i in header:
-        if str('-') in str(i):
-            tmpsampID = i
-    '''
-    # <solution to above> 
-    #       assumes that sample ID is the final column in the header. always true? 
-    #       if not always true, adopt the parse_mutect solution here as well
+    # Below attempts to grab sample ID. 
+    # assumes that sample ID is the final column in the header. always true? 
+    # if not always true, adopt the parse_mutect solution here as well
     tmpsampID = header[-1]
-    # </solution to above>
     
     for i in row[fieldId['FORMAT']].split(':'):
         if i == "AD":
@@ -460,7 +431,7 @@ def parse_FreeBayes(row, fieldId, header):
     return VF, DP, position
 
 def parse_MAF(row, fieldId, header):
-    position = int(str(row[fieldId['Start_position']]).split('.')[0]) # case sensitive. what if, 'Start_Position' instead? 
+    position = int(str(row[fieldId['Start_position']]).split('.')[0]) # case sensitive. what if, 'Start_Position' instead? case-insensitive hash lookup, or make everything lowercase befor making comparisons?
     DP = int(str(row[fieldId['TTotCov']]).split('.')[0])
     VF = float( float(row[fieldId['TVarCov']])/float(DP) )
     chrom = str(row[fieldId['Chromosome']])
@@ -491,33 +462,27 @@ def filterRow(row, fieldId, filters, kind):
                 return True
                 break
     return False
-'''
-def inRegion(chrom, start, end, region):
-    region_chrom = region.split(':')[0]
-    try:
-        region_locs = region.split(':')[1]
-        region_start = region_locs.split('-')[0]
-        region_end = region_locs.split('-')[1]
-        if str(chrom) == str(region_chrom) and int(start) >= int(region_start) and int(end) <= int(region_end):
-            return True
-    except IndexError:
-        if str(chrom) == str(region_chrom):
-            return True
-    return False
-'''
 
 def inRegionDict(chrom, start, end, regionDict):
-    if regionDict[chrom]:
-        for locs in regionDict[chrom]:
-            if locs[0] == 0 and locs[1] == 0:
+    '''Checks the given mutation location to see if it is in the dictionary of regions'''
+    if regionDict[chrom]: # are there any regions of interest in the same chromosome as this mutation?
+        for locs in regionDict[chrom]: # breaking the list of regions according to chromosome should significantly decrease the number of comparisons necessary 
+            if locs[0] == 0 and locs[1] == 0: # chrN:0-0 is used to define an entire chromosome as a region of interest. 
                 return True
             elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
                 return True
     return False
 
 def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
+    '''
+    Input a mutation and the current list of known mutations and features
+    If this mutation already exists in another form, returns True, along with the existing ref and alt.
+        Existing in another form is defined as 2 mutations that occur in the same position and have different ref/alt, but are functionally equivalent
+        Ex: ref/alt: A/AT compared to ref/alt: ATT/ATTT
+        The refs and the alts are different, but both mutations represent the same T insertion
+    '''
     if len(var.ref) != len(var.alt):
-        for kvar in knownFeatures[featureName].variants:
+        for kvar in knownFeatures[featureName].variants: # kvar --> known variant
             if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)) == str(indelDelta(kvar.ref, kvar.alt)):
                 return True, kvar.ref, kvar.alt
                 break
@@ -534,6 +499,10 @@ def indelDelta(ref, alt):
         return ""
 
 def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regions): 
+    '''
+    Read in all input files
+    Log mutations in the variant dataframe 
+    '''
     # parse the variant files (VCF, muTect format)
     startTime = time.clock()
 
@@ -570,6 +539,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             continue    # next fn in variantFiles
         #if len(row) != 1: raise ValueError('Invalid muTector header')
         #if "## muTector" not in row[0]: raise ValueError('Invalid muTector header')
+
+        # declare all data types False, then reassign to True as they are encountered.
+        # only one should be true at a time for any given file (fn)
         global MiSeq
         MiSeq = False
         global IonTorrent
@@ -592,12 +564,16 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
         MAF = False
         global GVF
         GVF = False
+
+        # check filename for MAF or GVF
         if str(fn.split('.')[-1].strip()).lower() == 'maf':
             MAF = True
             while str(row[0]).startswith('#'):
                 row = varReader.next()
         if str(fn.split('.')[-1].strip()).lower() == 'gvf':
             GVF = True
+
+        # check VCF file headers for the variant calling software used
         while str(row).split("'")[1][0:2] == '##': 
             if str('Torrent Unified Variant Caller') in str(row): 
                 IonTorrent = True
@@ -623,8 +599,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
         if len(header) == 0: raise ValueError('Invalid header')
         fieldId = dict(zip(header, range(0, len(header))))
 
-        # read coverage depth minimum cutoff; currently unusued
-        #read_depth_min = 0
         # after reading the two header rows, read data
         for row in itertools.islice(varReader, None):
             if filterRow(row, fieldId, filters, kind):    # filter rows as they come in, to prevent them from entering the dataframe
@@ -651,6 +625,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
                         FC += str(guy) + ";"
             except KeyError:
                 pass
+
+            # parse the row of data, depending on the type of data
             if MiSeq:
                 VF, DP, position = parse_MiSeq(row, fieldId, header)
                 chrom = row[0]
@@ -738,21 +714,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             rowAnnotated, rowAnnotation = isAnnotatedSNP(var, database)
             datab = str(rowAnnotation)
 
-            '''
-            if ( str('NM_001290815') in str(feature) or str(feature) == "NM_001290815" ) and str(chr) == "chr19" and int(pos) == 57110490:
-                pdb.set_trace()
-                # for i in knownFeatures['NM_001290815'].variants: print(i.pos.pos)
-            '''
-
-
-            '''
-            if Mutect or Mutector:
-                datab = MuTect_Annotations[(chr, pos)]
-            '''
-            '''
-            if skipThisIndel(ref, alt):
-                for var in knownFeatures[feature]
-            '''
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
@@ -772,6 +733,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
     return varDF, knownFeatures, gas 
 
 def printRunInfo(config, outputDirName):
+    '''
+    Print useful information about the run, including the version, time, and configuration used
+    '''
     try: 
         ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
     except:
@@ -790,6 +754,9 @@ def printRunInfo(config, outputDirName):
     ofRunInfo.close()
 
 def printCounts(outputDirName, knownFeatures):
+    '''
+    Print counts per feature 
+    '''
     try:
         ofCounts = open(outputDirName + "/counts.txt", 'w+')
     except:
@@ -826,6 +793,10 @@ def printCounts(outputDirName, knownFeatures):
     ofCounts.close()
 
 def printVariantDetails(outputDirName, knownFeatures, varDF, total):
+    '''
+    Print all information about each mutation. Mutations are combined into 1 row per location and ref/alt, with multiple samples in the 'Source' column when necessary.
+    Output is in text format. 
+    '''
     try:
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
     except:
@@ -833,9 +804,8 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
 
     # =========================================================
     # variant_details.txt
-    #
 
-    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t') ######## Karl Modified ##############
+    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t')
     if SnpEff_switch:
         ofVariantDetails.write('Effect\tFC\t')
     if database_switch:
@@ -849,8 +819,6 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
-                
-                #if not isAnnotatedSNP(snps, tuple((var.pos.chrom,var.pos.pos))):  ##### KARL ADDED ######
                 ofVariantDetails.write(feature.name + "\t")
                 ofVariantDetails.write(var.pos.chrom + "\t")
                 ofVariantDetails.write(str(var.pos.pos) + "\t")
@@ -882,20 +850,16 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
                 ofVariantDetails.write(var.source + "\n")
                 nrow += 1
                 
-        ########### Karl added bed file output here #############
     ofVariantDetails.close()
     print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
 
 def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
-    try:
-        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    Identical to the printVariantDetails function above, but in XLS format instead of TXT
     '''
     # =========================================================
-    # variant_details.txt
-    #
+    # variant_details.xls
+
     workbook = xlwt.Workbook()
     ofVariantDetails = workbook.add_sheet('Variant Details')
     nrow = 0
@@ -969,20 +933,17 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                 ncol += 1
                 nrow += 1
                 
-        ########### Karl added bed file output here #############
     workbook.save(outputDirName + '/variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
 
 def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
-    try:
-        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    Similar to printVariantDetailsXLS above, but writes each instance of a mutation to a new row. 
+    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
     '''
     # =========================================================
-    # variant_details.txt
-    #
+    # long_variant_details.xls
+
     workbook = xlwt.Workbook()
     ofLongVariantDetails = workbook.add_sheet('Long Variant Details')
     nrow = 0
@@ -1058,17 +1019,19 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                     ncol += 1
                     nrow += 1
                 
-        ########### Karl added bed file output here #############
     workbook.save(outputDirName + '/long_variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), nrow))
 
 def printVariantBed(outputDirName, knownFeatures):
+    '''
+    Print bed file of the variant locations
+    '''
     try:
         ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
     except:
         abortWithMessage("Error opening output files in {0}/".format(outputDirName))
     # =========================================================
-    # variant_details.txt
+    # variant_locations.bed
     #
     masterList = list(knownFeatures.values())
     sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
@@ -1080,13 +1043,17 @@ def printVariantBed(outputDirName, knownFeatures):
                 ofVariantBeds.write(var.pos.chrom + "\t")
                 ofVariantBeds.write(str(var.pos.pos - 1) + "\t")
                 ofVariantBeds.write(str(var.pos.pos) + "\t")
-                #ofVariantBeds.write(str(snps[tuple((var.pos.chrom,var.pos.pos))]) + "\t") # used to write dbSNP name in bed name field
                 ofVariantBeds.write("\n")
                 nrow += 1
     ofVariantBeds.close()
     print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
 
 def getMetricsVCF(var, sourcefile):
+    ''' 
+    Return the depth and variant frequency for the given variant, according to the given source file 
+    Does not necessarily have to have occurred in the source
+        Returns 0,0 if it wasn't reported
+    '''
     n = 0
     dp = 0
     vf = 0
@@ -1105,13 +1072,17 @@ def getMetricsVCF(var, sourcefile):
 
 
 def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
+    ''' 
+    Print 1 vcf file as output
+    There is 1 column per sample for the information they do not share (Ex. DP, VF)
+    '''
     try:
         ofBigVCF = open(outputDirName + "/variant_calls.vcf", 'w+')
     except:
         abortWithMessage("Error opening output files in {0}/".format(outputDirName))
     # =========================================================
     # variant_calls.vcf
-    #    
+        
     ofBigVCF.write("##fileformat=VCFv4.1\n")
     ofBigVCF.write('##FORMAT=<ID=DP,Type=Float,Description="Depth of read coverage">\n')
     ofBigVCF.write('##FORMAT=<ID=VF,Type=Float,Description="Fraction of reads displaying alternative allele">\n')

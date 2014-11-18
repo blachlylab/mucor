@@ -26,15 +26,21 @@ def abortWithMessage(message, help = False):
 def throwWarning(message, help = False):
     print("*** WARNING: " + message + " ***")
 
+'''
+# no longer needed?
 def str_to_bool(s):
     if str(s) == 'False':
         return False
     else:
         return True
+'''
 
 def DetectDataType(fn):
-    #if str(fn).split('.')[-1].strip().lower() == str("maf"):
-        #return "MAF"
+    '''
+    Pass a file path in and it will return the name of the tool that created the file. 
+    Only works with the expected formats, outlined below.
+    '''
+
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
     row = varReader.next()
@@ -67,6 +73,9 @@ def DetectDataType(fn):
     return "Unknown"
 
 def DetectSnpEffStatus(fn):
+    '''
+    Pass a file path in and return True or False according to whether SnpEff has been run on this file.
+    '''
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
     try:
@@ -80,9 +89,13 @@ def DetectSnpEffStatus(fn):
         row = varReader.next()
     return False
 
-### TODO: snpEff trump detection? Ex: prefer a snp annotated version of a sample's output files
-
 def filterFileList(json_dict_row):
+    '''
+    ### TODO: snpEff trump detection? Ex: prefer a snp annotated version of a sample's output files
+    Currently unused. Does not work
+    Function to select most complete file(s) for a sample. 
+        For example, if an unannotated vcf and a SnpEff decorated file are present for the same sample ID, this should only return the SnpEff version.
+    '''
     annotated_vcf = 3
     unannotated_vcf = 2
     mutect_output = 1
@@ -103,8 +116,11 @@ def filterFileList(json_dict_row):
             mstatus[i['source']][sid] = mutect_output
     return status
 
-def thing(args, proj_dir):
-# TO DO : Pull these dictionary values from the 'Config' class variables for consistency
+def getJSONDict(args, proj_dir):
+    '''
+    Create the JSON dictionary. JSON dict keys are identical to the config class. 
+    Converts the user input args from argparse into a dictionary
+    '''
     json_dict = defaultdict()
     json_dict['outputDir'] = str(args.output_directory).split('/')[-1]
     json_dict['gff'] = str(args.gff)
@@ -148,27 +164,35 @@ def thing(args, proj_dir):
         if str(sid) == "":
             continue
         else:
-            something = defaultdict()
-            something['id'] = str(sid)
-            something['files'] = list()
+            # sample name is real
+            # walk over the input project directory (or CWD if none defined) to find all files with sample ID in the name
+            tmpSampleDict = defaultdict()
+            tmpSampleDict['id'] = str(sid)
+            tmpSampleDict['files'] = list()
             for root, dirs, files in os.walk(proj_dir):
                 for i in files:
                     if str(sid) in str(i): # be careful with sample names here. "U-24" will catch "U-240" etc. 
                         full_path = os.path.join(root, i)
                         if str(i).split('.')[-1] == str("vcf"):
-                            something['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':DetectDataType(full_path)} )
+                            tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':DetectDataType(full_path)} )
                         elif str(i).split('.')[-1] == str("out"):
-                            something['files'].append({'type':'mutect', 'path':str(full_path), 'source':DetectDataType(full_path)} )
+                            tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':DetectDataType(full_path)} )
                         elif str(i).split('.')[-1].lower() == str("maf"):
-                            something['files'].append({'type':'maf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
+                            tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
                         elif str(i).split('.')[-1].lower() == str("gvf"):
-                            something['files'].append({'type':'gvf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
+                            tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':DetectDataType(full_path)} )
                         else:
+                            # If not a VCF, MAF, GVF, or Mutect .out type, print this warning and ignore it
+                            # Could be unnecessary. If we ever add a '--verbose' option, this will be broken off into that
                             print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
-        json_dict['samples'].append(something)
+        json_dict['samples'].append(tmpSampleDict)
     return json_dict
 
 def inconsistentFilesPerSample(json_dict):
+    '''
+    For each sample, count the number of files found. If any sample has an inconsistent number compared to the others, returns True
+    Useful for identifying sample IDs missing an expected file
+    '''
     numset = set()
     for sample in json_dict['samples']:
         numset.add(len(sample['files']))
@@ -211,7 +235,7 @@ def main():
         proj_dir = cwd
     else:
         proj_dir = args.project_directory
-    json_dict = thing(args, proj_dir)
+    json_dict = getJSONDict(args, proj_dir)
     if inconsistentFilesPerSample(json_dict):
         throwWarning("Inconsistent number of files per sample")
         print("File #\tSample ID")
