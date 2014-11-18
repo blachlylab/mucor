@@ -1157,33 +1157,30 @@ def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
     print("\t{0}: {1} rows".format(ofBigVCF.name, nrow))
 
 
-def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF): ######## Karl Modified ##############
+def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
 
-    # TODO: pull output options from json file (config class) and put if statements here to selectively output
-    outputFormatsDict = defaultdict(bool)
-    for format in outputFormats:
-        outputFormatsDict[format] = bool(True)
     total = len(set(config.samples))                # used in frequency calculation. config.samples will use sample count as the denominator. samples.inputFiles will use file count
     printRunInfo(config, outputDirName)
-    if outputFormatsDict['counts']:
+    
+    if 'counts' in config.outputFormats:
         printCounts(outputDirName, knownFeatures)
-    if outputFormatsDict['txt']:
+    if 'txt' in config.outputFormats:
         printVariantDetails(outputDirName, knownFeatures, varDF, total)
-    if outputFormatsDict['bed']:
+    if 'bed' in config.outputFormats:
         printVariantBed(outputDirName, knownFeatures)
-    if outputFormatsDict['xls'] and 'xlwt' in sys.modules:
+    if 'xlwt' in config.outputFormats and 'xlwt' in sys.modules:
         printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
-    if outputFormatsDict['default']:
+    if 'default' in config.outputFormats:
         if 'xlwt' in sys.modules: printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
         printVariantBed(outputDirName, knownFeatures)
         printCounts(outputDirName, knownFeatures)
-    if outputFormatsDict['long'] and 'xlwt' in sys.modules:
+    if 'long' in config.outputFormats and 'xlwt' in sys.modules:
         printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
-    if outputFormatsDict['vcf']:
+    if 'vcf' in config.outputFormats:
         printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
 
     totalTime = time.clock() - startTime
@@ -1218,7 +1215,7 @@ def main():
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
     varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.database, config.filters, config.regions)
-    printOutput(config, str(config.outputDir), config.outputFormats, knownFeatures, gas, varDF) ######## Karl Modified ##############
+    printOutput(config, str(config.outputDir), knownFeatures, gas, varDF)
     
     ## ## ##
     # print record format (long format) all variants data frame
