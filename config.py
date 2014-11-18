@@ -34,8 +34,8 @@ class Config(object):
                         "\n\t\t".join(self.filters) + "\n" + \
                         "\tInput Files: \n\t\t" + \
                         "\n\t\t".join(self.inputFiles) + "\n" + \
-                        "\tOutput Formats: \n" + \
+                        "\tOutput Formats: \n\t\t" + \
                         "\n\t\t".join(self.outputFormats) + "\n"
-        string_rep = string_rep.format(str(len(self.inputFiles)), self.feature, \
+        string_rep = string_rep.format(str(len(self.inputFiles)), self.featureType, \
                                       self.outputDir, self.union, self.fast, self.gff)
         return string_rep
