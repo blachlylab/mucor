@@ -9,24 +9,31 @@
 # ala python3
 from __future__ import print_function
 
+# python standard modules
 import os
 import sys
 import time
 import argparse #transitioned from getopt
 import csv
 import itertools
-import HTSeq
 from collections import defaultdict
 import gzip
 import cPickle as pickle
 import pdb   #pdb.set_trace()
-import xlwt
 import xml.etree.ElementTree as ET
 import json
 
+# nonstandard modules
 import numpy as np
 import pandas as pd
+import HTSeq
 
+# optional modules
+try:
+    import xlwt
+except ImportError:
+    print("Excel writer module xlwt not found; Microsoft Excel output disabled")
+    
 # mucor modules
 import mucorfilters as mf
 from variant import Variant
