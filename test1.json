@@ -1,0 +1,100 @@
+{
+    "database": [
+        "/fs/lustre/osu7366/references/human/cosmic/cosmic_coding_v64.hg19.sorted.leftalign.vcf.gz"
+    ], 
+    "fast": true, 
+    "feature": "gene_name", 
+    "filters": [
+        ".", 
+        "PASS"
+    ], 
+    "gff": "/fs/lustre/osu7366/references/human/gencode/gencode.v19.annotation.gtf", 
+    "outputDir": "test1", 
+    "outputFormats": [
+        "long", 
+        "xls"
+    ], 
+    "regions": [
+        "chr1"
+    ], 
+    "samples": [
+        {
+            "files": [
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-275.realign.mutect.dbsnp_all.out", 
+                    "source": "Mutect", 
+                    "type": "mutect"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-275.realign.mutect.dbsnp_all_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "Mutect", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-275.indels_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "SomaticIndelDetector", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "U-03-275"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-278.realign.mutect.dbsnp_all_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "Mutect", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-278.indels_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "SomaticIndelDetector", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-03-278.realign.mutect.dbsnp_all.out", 
+                    "source": "Mutect", 
+                    "type": "mutect"
+                }
+            ], 
+            "id": "U-03-278"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-04-370.realign.mutect.dbsnp_all_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "Mutect", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-04-370.indels_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "SomaticIndelDetector", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-04-370.realign.mutect.dbsnp_all.out", 
+                    "source": "Mutect", 
+                    "type": "mutect"
+                }
+            ], 
+            "id": "U-04-370"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "/nfs/17/osu7366/projects/mucor/U-05-0471.indels_snpEff.vcf", 
+                    "snpeff": true, 
+                    "source": "SomaticIndelDetector", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "U-05-0471"
+        }
+    ], 
+    "union": false
+}
