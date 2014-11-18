@@ -33,7 +33,7 @@ try:
     import xlwt
 except ImportError:
     print("Excel writer module xlwt not found; Microsoft Excel output disabled")
-    
+
 # mucor modules
 import mucorfilters as mf
 from variant import Variant
@@ -1193,13 +1193,13 @@ def printOutput(config, outputDirName, outputFormats, knownFeatures, gas, varDF)
         printVariantDetails(outputDirName, knownFeatures, varDF, total)
     if outputFormatsDict['bed']:
         printVariantBed(outputDirName, knownFeatures)
-    if outputFormatsDict['xls']:
+    if outputFormatsDict['xls'] and 'xlwt' in sys.modules:
         printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
     if outputFormatsDict['default']:
-        printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
+        if 'xlwt' in sys.modules: printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
         printVariantBed(outputDirName, knownFeatures)
         printCounts(outputDirName, knownFeatures)
-    if outputFormatsDict['long']:
+    if outputFormatsDict['long'] and 'xlwt' in sys.modules:
         printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
     if outputFormatsDict['vcf']:
         printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
