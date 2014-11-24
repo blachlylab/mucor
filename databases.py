@@ -9,7 +9,11 @@ import gzip
 import pdb
 from collections import defaultdict
 import time
-import tabix
+import sys
+try:
+    import tabix
+except:
+    pass
 
 class KnownVariant:
     '''Data about known variants '''
@@ -119,6 +123,8 @@ def isAnnotatedSNP(var, dbs):
         elif str(var.pos.chrom).strip('chr') == "Y":
             chrom = int(24)
     '''
+    if 'tabix' not in sys.modules:
+        return False, str('?')
     try:
         chrom
     except:

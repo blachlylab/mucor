@@ -12,7 +12,7 @@ class Config(object):
             self.gff = ''
             self.union = False
             self.fast = False
-            self.feature = ''
+            self.featureType = ''
             self.filters = []
             self.outputFormats = []
             self.samples = []

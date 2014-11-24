@@ -33,6 +33,10 @@ try:
     import xlwt
 except ImportError:
     print("Excel writer module xlwt not found; Microsoft Excel output disabled")
+try:
+    import tabix
+except ImportError:
+    print("Tabix module not found; database features disabled")
 
 # mucor modules
 import mucorfilters as mf
@@ -209,7 +213,10 @@ def parseJSON(json_config):
     global database_switch
     # if any databases are defined, switch the database_switch ON (True)
     # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
-    database_switch = bool(config.database)
+    if 'tabix' in sys.modules:
+        database_switch = bool(config.database)
+    else:
+        database_switch = bool(False)
     global SnpEff_switch
     # works similar to database switch above.
     SnpEff_switch = False
@@ -308,10 +315,46 @@ def parseRegionBed(regionfile, regionDictIn):
     return regionDict
 
 def parse_MiSeq(row, fieldId, header):
-    VF = row[fieldId[header[-1]]].split(':')[-2]
-    DP = row[fieldId[header[-1]]].split(':')[2]
+    FC = str('')
+    EFF = str('')
+    for i in row[fieldId['INFO']].split(';'):
+        if i.startswith("DP="):
+            DP = i.split('=')[1]
+        if i.startswith("FC="):
+            global SnpEff_switch
+            SnpEff_switch = bool(True)
+            for j in i.split('=')[1].split(','):
+                if str(j.split('_')[0]) not in str(FC):
+                    FC += str(j.split('_')[0]) + ";"
+                try:
+                    if str(j.split('_')[1]) not in str(EFF):
+                        EFF += str(j.split('_')[1]) + ";"
+                except:
+                    pass
+        elif str(i) == "EXON":
+            FC += 'EXON'
+    if not FC:
+        FC = str("?")
+    if not EFF:
+        EFF = str("?")
+    k = 0
+    for i in row[fieldId['FORMAT']].split(':'):
+        if str(i) == "VF":
+            VF = float( row[fieldId[header[-1]]].split(':')[k] )
+        '''
+        #for when vf is not in the format column, but AD is
+        if str(i) == "AD" and not DP or not VF:
+            DP = 0
+            RD = int(row[fieldId[header[-1]]].split(':')[k].split(',')[0])
+            AD = int(row[fieldId[header[-1]]].split(':')[k].split(',')[1])
+            DP = int(RD) + int(AD)
+        '''
+        k += 1
+
+    #VF = row[fieldId[header[-1]]].split(':')[-2]
+    #DP = row[fieldId[header[-1]]].split(':')[2]
     position = int(row[fieldId['POS']])
-    return VF, DP, position
+    return VF, DP, position, EFF, FC
 
 def parse_IonTorrent(row, fieldId, header):
     for i in row[fieldId['INFO']].split(';'):
@@ -483,7 +526,7 @@ def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
     '''
     if len(var.ref) != len(var.alt):
         for kvar in knownFeatures[featureName].variants: # kvar --> known variant
-            if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)) == str(indelDelta(kvar.ref, kvar.alt)):
+            if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
                 return True, kvar.ref, kvar.alt
                 break
     return False, '', ''
@@ -491,12 +534,12 @@ def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
 def indelDelta(ref, alt):
     ''' Detects the inserted or deleted bases of an indel'''
     if len(alt) > len(ref):             # insertion
-        return alt.replace(ref,"",1)
+        return [ alt.replace(ref,"",1), str("INS") ]
     elif len(alt) < len(ref):           # deletion
-        return ref.replace(alt,"",1)
+        return [ ref.replace(alt,"",1), str("DEL") ]
     else:                               # SNP / MNP
         # there is already a SNP at this indel location 
-        return ""
+        return [ "", "" ]
 
 def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regions): 
     '''
@@ -607,8 +650,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             # make a variant object for row
             # TO DO: change row index#s to column names or transition to row object
 
-            EFF = ""
-            FC = ""
+            effect = ""
+            fc = ""
             muts = []
             loca = []
             try:
@@ -619,61 +662,61 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
                             loca.append(str(j.split('(')[0]).replace('EFF=',''))
                 for guy in set(muts):
                     if str(guy) != "":
-                        EFF += str(guy) + ";"
+                        effect += str(guy) + ";"
                 for guy in set(loca):
                     if str(guy) != "":
-                        FC += str(guy) + ";"
+                        fc += str(guy) + ";"
             except KeyError:
                 pass
 
             # parse the row of data, depending on the type of data
             if MiSeq:
-                VF, DP, position = parse_MiSeq(row, fieldId, header)
+                vf, dp, position, effect, fc = parse_MiSeq(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif IonTorrent:
-                VF, DP, position = parse_IonTorrent(row, fieldId, header)
+                vf, dp, position = parse_IonTorrent(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif Mutect:
-                VF, DP, position = parse_MuTectVCF(row, fieldId, header, fn) # , MuTect_Annotations)
+                vf, dp, position = parse_MuTectVCF(row, fieldId, header, fn) # , MuTect_Annotations)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif SomaticIndelDetector:
-                VF, DP, position = parse_SomaticIndelDetector(row, fieldId, header)
+                vf, dp, position = parse_SomaticIndelDetector(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif Mutector:
-                VF, DP, position = parse_MuTectOUT(row, fieldId) # , MuTect_Annotations)
+                vf, dp, position = parse_MuTectOUT(row, fieldId) # , MuTect_Annotations)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif Samtools:
-                VF, DP, position = parse_SamTools(row, fieldId, header)
+                vf, dp, position = parse_SamTools(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif VarScan:
-                VF, DP, position = parse_VarScan(row, fieldId, header)
+                vf, dp, position = parse_VarScan(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif HapCaller:
-                VF, DP, position = parse_HapCaller(row, fieldId, header)
+                vf, dp, position = parse_HapCaller(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif FreeBayes:
-                VF, DP, position = parse_FreeBayes(row, fieldId, header)
+                vf, dp, position = parse_FreeBayes(row, fieldId, header)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
             elif MAF:
-                VF, DP, position, chrom, ref, alt = parse_MAF(row, fieldId, header)
+                vf, dp, position, chrom, ref, alt = parse_MAF(row, fieldId, header)
 
             else:
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
@@ -681,7 +724,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
                 chrom = str("chr" + str(chrom))
             if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
                 continue
-            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=VF, dp=DP, eff=EFF.strip(';'), fc=FC.strip(';'))
+            #pdb.set_trace()
+            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
             ###########################################
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
@@ -703,11 +747,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             pos = int(position)
             #ref = row[3]
             #alt = row[4]
-            vf = VF     # to do, change (karl capitalizes)
-            dp = DP     # to do, change (karl capitalizes)
+            #vf = VF     # to do, change (karl capitalizes)
+            #dp = DP     # to do, change (karl capitalizes)
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
-            effect = EFF
-            fc = FC
+            #effect = EFF
+            #fc = FC
             #sample = fn.split('/')[-1]      # to do, will need to come from JSON config
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
@@ -1013,7 +1057,7 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                             ncol += 1
                     ofLongVariantDetails.write(nrow, ncol, int(len(var.source.split(','))))
                     ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, float(float(len(var.source.split(',')))/float(total))  )
+                    ofLongVariantDetails.write(nrow, ncol, float(float(len(set(var.source.split(', '))))/float(total))  )
                     ncol += 1
                     ofLongVariantDetails.write(nrow, ncol, str(var.source.split(', ')[j]))
                     ncol += 1
