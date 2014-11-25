@@ -897,6 +897,68 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
     ofVariantDetails.close()
     print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
 
+def printLongVariantDetails(outputDirName, knownFeatures, varDF, total):
+    '''
+    Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
+    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
+    '''
+    try:
+        ofLongVariantDetails = open(outputDirName + "/long_variant_details.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+    # =========================================================
+    # long_variant_details.txt
+
+    ofLongVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t')
+    if SnpEff_switch:
+        ofLongVariantDetails.write('Effect\tFC\t')
+    if database_switch:
+        ofLongVariantDetails.write('Annotation\t')
+    ofLongVariantDetails.write('Count\tFrequency\tSource\n')
+
+    masterList = list(knownFeatures.values())
+    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
+    nrow = 0
+
+    for feature in sortedList:
+        if knownFeatures[feature.name].variants:
+            for var in knownFeatures[feature.name].uniqueVariants():
+                for j in range(len(var.dp.split(','))):
+                    ofLongVariantDetails.write(feature.name + "\t")
+                    ofLongVariantDetails.write(var.pos.chrom + "\t")
+                    ofLongVariantDetails.write(str(var.pos.pos) + "\t")
+                    ofLongVariantDetails.write(var.ref + "\t")
+                    ofLongVariantDetails.write(var.alt + "\t")
+                    ofLongVariantDetails.write(var.frac.split(', ')[j] + "\t")
+                    ofLongVariantDetails.write(var.dp.split(', ')[j] + "\t")
+                    
+                    if SnpEff_switch:
+                        if str(var.eff) != str(''):
+                            ofLongVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
+                        else:
+                            ofLongVariantDetails.write(str('?') + "\t")
+                        if str(var.fc) != str(''):
+                            ofLongVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
+                        else:
+                            ofLongVariantDetails.write(str('?') + "\t")
+                    if database_switch:
+                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
+                            ofLongVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
+                        else:
+                            tempdb = ""
+                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                                if str(i) not in str(tempdb):
+                                    tempdb += str(i) + ","
+                            ofLongVariantDetails.write(tempdb.strip(',') + "\t")
+                    ofLongVariantDetails.write(str(len(var.source.split(','))) + "\t")
+                    ofLongVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + "\t" )
+                    ofLongVariantDetails.write(var.source.split(', ')[j] + "\n")
+                    nrow += 1
+                
+    ofLongVariantDetails.close()
+    print("\t{0}: {1} rows".format(ofLongVariantDetails.name, nrow))
+
 def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
     Identical to the printVariantDetails function above, but in XLS format instead of TXT
@@ -1195,6 +1257,8 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
         printCounts(outputDirName, knownFeatures)
     if 'long' in config.outputFormats and 'xlwt' in sys.modules:
         printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
+    if 'longtxt' in config.outputFormats:
+        printLongVariantDetails(outputDirName, knownFeatures, varDF, total)
     if 'vcf' in config.outputFormats:
         printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
 
