@@ -128,6 +128,9 @@ def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
     exit(2)
 
+def throwWarning(message, help = False):
+    print("*** WARNING: " + message + " ***")
+
 def is_int(term):
     try:
         if int(term):
@@ -1038,7 +1041,10 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                 ofVariantDetails.write(nrow, ncol, str(var.source))
                 ncol += 1
                 nrow += 1
-                
+                if nrow >= 65536:
+                    throwWarning("Excel xls format cannot handle all your mutations")
+                    throwWarning("{0} output could not be completed!".format(str(outputDirName + '/variant_details.xls')))
+                    return
     workbook.save(outputDirName + '/variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
 
@@ -1124,6 +1130,10 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                     ofLongVariantDetails.write(nrow, ncol, str(var.source.split(', ')[j]))
                     ncol += 1
                     nrow += 1
+                    if nrow >= 65536:
+                        throwWarning("Excel xls format cannot handle all your mutations")
+                        throwWarning("{0} output could not be completed!".format(str(outputDirName + '/long_variant_details.xls')))
+                        return
                 
     workbook.save(outputDirName + '/long_variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), nrow))
