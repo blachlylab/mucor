@@ -432,7 +432,7 @@ def parse_SamTools(row, fieldId, header):
             alt = int(int(j[2]) + int(j[3]))
             DP = int(int(ref) + int(alt))
             VF = float( float(alt)/float(DP) )
-    return VF, DP, position
+            return VF, DP, position
 
 def parse_VarScan(row, fieldId, header):
     j = 0
@@ -760,7 +760,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             source = fn.split('/')[-1]
             rowAnnotated, rowAnnotation = isAnnotatedSNP(var, database)
             datab = str(rowAnnotation)
-
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
             vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
@@ -884,11 +883,11 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
                     else:
                         ofVariantDetails.write(str('?') + "\t")
                 if database_switch:
-                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
+                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0] + "\t") 
                     else:
                         tempdb = ""
-                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
                             if str(i) not in str(tempdb):
                                 tempdb += str(i) + ","
                         ofVariantDetails.write(tempdb.strip(',') + "\t")
@@ -946,11 +945,11 @@ def printLongVariantDetails(outputDirName, knownFeatures, varDF, total):
                         else:
                             ofLongVariantDetails.write(str('?') + "\t")
                     if database_switch:
-                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                            ofLongVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
+                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
+                            ofLongVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0] + "\t") 
                         else:
                             tempdb = ""
-                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
                                 if str(i) not in str(tempdb):
                                     tempdb += str(i) + ","
                             ofLongVariantDetails.write(tempdb.strip(',') + "\t")
@@ -1024,12 +1023,12 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                         ofVariantDetails.write(nrow, ncol, str('?'))
                         ncol += 1
                 if database_switch:
-                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                        ofVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0]) )
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
+                        ofVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0]) )
                         ncol += 1
                     else:
                         tempdb = ""
-                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
                             if str(i) not in str(tempdb):
                                 tempdb += str(i) + ","
                         ofVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
@@ -1113,12 +1112,12 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                             ofLongVariantDetails.write(nrow, ncol, str('?'))
                             ncol += 1
                     if database_switch:
-                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                            ofLongVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0]) )
+                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
+                            ofLongVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0]) )
                             ncol += 1
                         else:
                             tempdb = ""
-                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
                                 if str(i) not in str(tempdb):
                                     tempdb += str(i) + ","
                             ofLongVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
@@ -1215,11 +1214,11 @@ def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
             for var in knownFeatures[feature.name].uniqueVariants():
                 ofBigVCF.write(str(var.pos.chrom) + "\t" + str(var.pos.pos) + "\t")
                 if database_switch:
-                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()) == 1:
-                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()[0] + "\t") 
+                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
+                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0] + "\t") 
                     else:
                         tempdb = ""
-                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom))].datab.unique()).replace(',','').split(' ')]:
+                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
                             if str(i) not in str(tempdb):
                                 tempdb += str(i) + ";"
                         ofVariantDetails.write(tempdb.strip(';') + "\t")
