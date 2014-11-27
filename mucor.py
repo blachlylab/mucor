@@ -131,13 +131,6 @@ def abortWithMessage(message):
 def throwWarning(message, help = False):
     print("*** WARNING: " + message + " ***")
 
-def is_int(term):
-    try:
-        if int(term):
-            return True
-    except:
-        return False 
-
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     for feature in itertools.islice(gffFile, 0, None):
@@ -723,8 +716,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
 
             else:
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
-            if is_int(chrom):
-                chrom = str("chr" + str(chrom))
             if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
                 continue
             #pdb.set_trace()
