@@ -13,13 +13,13 @@ from __future__ import print_function
 import os
 import sys
 import time
-import argparse #transitioned from getopt
+import argparse
 import csv
 import itertools
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-import pdb   #pdb.set_trace()
+import pdb                             # Needed for pdb.set_trace()
 import xml.etree.ElementTree as ET
 import json
 
@@ -136,7 +136,8 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     for feature in itertools.islice(gffFile, 0, None):
         # Nonstandard contigs (eg chr17_ctg5_hap1, chr19_gl000209_random, chrUn_...)
         # must be specifically excluded, otherwise you will end up with exception
-        # ValueError: start is larger than end due to duplicated gene symbols
+        # ValueError: start is larger than end
+        # due to duplicated gene symbols
         if "_hap" in feature.iv.chrom:
             continue
         elif "_random" in feature.iv.chrom:
@@ -206,6 +207,7 @@ def parseJSON(json_config):
         config.regions = []
     # comma separated list of acceptable VCF filter column values
     config.filters = JD['filters']
+
     global database_switch
     # if any databases are defined, switch the database_switch ON (True)
     # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
@@ -213,6 +215,7 @@ def parseJSON(json_config):
         database_switch = bool(config.database)
     else:
         database_switch = bool(False)
+    
     global SnpEff_switch
     # works similar to database switch above.
     SnpEff_switch = False
@@ -248,9 +251,8 @@ def parseGffFile(gffFileName, featureType, fast):
     archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
     print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
-    #ga = HTSeq.GenomicArray("auto", typecode="i")  # typecode i is integer
     
-    knownFeatures = {}                              # empty dict
+    knownFeatures = {}
 
     duplicateFeatures = set()
 
@@ -347,8 +349,6 @@ def parse_MiSeq(row, fieldId, header):
         '''
         k += 1
 
-    #VF = row[fieldId[header[-1]]].split(':')[-2]
-    #DP = row[fieldId[header[-1]]].split(':')[2]
     position = int(row[fieldId['POS']])
     return VF, DP, position, EFF, FC
 
@@ -481,10 +481,10 @@ def parse_MAF(row, fieldId, header):
     if alt == "-":
         alt = ""
     return VF, DP, position, chrom, ref, alt
-'''
-def parse_GVF(row, fieldId, header):
-    position = 
-'''
+
+#def parse_GVF(row, fieldId, header):
+#    position = 
+
 def filterRow(row, fieldId, filters, kind):
     '''
     returning True means this row will be filtered out [masked]
@@ -542,11 +542,13 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
     Read in all input files
     Log mutations in the variant dataframe 
     '''
-    # parse the variant files (VCF, muTect format)
     startTime = time.clock()
 
     # All variants stored in long (record) format
     # in a pandas dataframe
+    #
+    # However, it is MUCH faster to initially store them in a python Dict
+    # Then convert to the pandas DF at the end
     varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
     
     if regions: # has the user specified any particular regions or region files to focus on?
@@ -576,8 +578,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             # a file was empty (i.e. no first row to read)
             print("Empty file {}".format(fn))
             continue    # next fn in variantFiles
-        #if len(row) != 1: raise ValueError('Invalid muTector header')
-        #if "## muTector" not in row[0]: raise ValueError('Invalid muTector header')
 
         # declare all data types False, then reassign to True as they are encountered.
         # only one should be true at a time for any given file (fn)
@@ -640,11 +640,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
 
         # after reading the two header rows, read data
         for row in itertools.islice(varReader, None):
-            if filterRow(row, fieldId, filters, kind):    # filter rows as they come in, to prevent them from entering the dataframe
-                continue                            # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
-
-            # make a variant object for row
-            # TO DO: change row index#s to column names or transition to row object
+            if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
+                continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
 
             effect = ""
             fc = ""
@@ -718,19 +715,17 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
             if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
                 continue
-            #pdb.set_trace()
             var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+
             ###########################################
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
             if resultSet:                   # which I'll use as a key on the knownFeatures dict
-                #print var.pos              # and each feature with matching ID gets allocated the variant
-                #print(gas[ var.pos ])      # 
+                #                           # and each feature with matching ID gets allocated the variant
                 for featureName in resultSet:
                     skipDupIndel, kvarref, kvaralt = skipThisIndel(var.ref, var.alt, knownFeatures, featureName, position, var)
                     if bool(skipDupIndel):
                         # Sanity check to see what indels are being overwritten by existing vars
-                        #print(var.pos.chrom, var.pos.pos, var.ref, var.alt, kvarref, kvaralt)
                         var.ref = kvarref
                         var.alt = kvaralt
                     
@@ -739,14 +734,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             # Descriptive variable names
             chr = chrom
             pos = int(position)
-            #ref = row[3]
-            #alt = row[4]
-            #vf = VF     # to do, change (karl capitalizes)
-            #dp = DP     # to do, change (karl capitalizes)
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
-            #effect = EFF
-            #fc = FC
-            #sample = fn.split('/')[-1]      # to do, will need to come from JSON config
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
             rowAnnotated, rowAnnotation = isAnnotatedSNP(var, database)

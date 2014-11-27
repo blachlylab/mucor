@@ -7,8 +7,7 @@ class Config(object):
     """Object to hold configuration options passed from cmdline or parsed from JSON config file"""
 
     def __init__(self):
-            # run_name = ''   # As named in JSON
-            self.outputDir = '' # As used in mucor.py -- TO DO: need consistency between config options and var names to facilitate programmatic introspection etc.
+            self.outputDir = ''
             self.gff = ''
             self.union = False
             self.fast = False
