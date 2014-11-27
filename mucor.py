@@ -569,7 +569,14 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
         kind = str(str(fn).split('.')[-1].strip().lower())
-        varFile = open(fn, 'rb')    # TO DO: error handling
+        
+        try:
+            varFile = open(fn, 'rb')
+        except IOError:
+            # file does not exist or cannot be opened
+            throwWarning('{} could not be opened'.format(fn))
+            continue    # next fn in variantFiles
+
         varReader = csv.reader(varFile, delimiter="\t")
 
         try:
