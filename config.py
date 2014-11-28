@@ -16,7 +16,7 @@ class Config(object):
             self.outputFormats = []
             self.samples = []
             self.inputFiles = []    # derived from samples
-            self.database = []
+            self.databases = []
             self.regions = []
 
     def __str__(self):
@@ -28,7 +28,7 @@ class Config(object):
                         "\tFast: {4}\n" + \
                         "\tAnnotation: {5}\n" + \
                         "\tDatabase(s): \n\t\t" + \
-                        "\n\t\t".join(self.database) + "\n" + \
+                        "\n\t\t".join(self.databases) + "\n" + \
                         "\tFilter(s): \n\t\t" + \
                         "\n\t\t".join(self.filters) + "\n" + \
                         "\tInput Files: \n\t\t" + \

@@ -130,6 +130,7 @@ def abortWithMessage(message):
 
 def throwWarning(message, help = False):
     print("*** WARNING: " + message + " ***")
+    return
 
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
@@ -197,10 +198,10 @@ def parseJSON(json_config):
     config.gff = JD['gff']
     config.outputFormats = JD['outputFormats']
     # JSON dict represents empty database as a list of 1 unicode list. Cannot appropriately cast it as a bool, because it returns True. 
-    if str(JD['database']) == str("[u'[]']"):
-        config.database = []
+    if str(JD['databases']) == str("[u'[]']"):
+        config.databases = []
     else:
-        config.database = JD['database']
+        config.databases = JD['databases']
     if str(JD['regions']):
         config.regions = JD['regions']
     else:
@@ -212,7 +213,7 @@ def parseJSON(json_config):
     # if any databases are defined, switch the database_switch ON (True)
     # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
     if 'tabix' in sys.modules:
-        database_switch = bool(config.database)
+        database_switch = bool(config.databases)
     else:
         database_switch = bool(False)
     
@@ -537,7 +538,7 @@ def indelDelta(ref, alt):
         # there is already a SNP at this indel location 
         return [ "", "" ]
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regions): 
+def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regions): 
     '''
     Read in all input files
     Log mutations in the variant dataframe 
@@ -744,7 +745,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, database, filters, regio
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             sample = filename2samples[str(fn.split('/')[-1])]
             source = fn.split('/')[-1]
-            rowAnnotated, rowAnnotation = isAnnotatedSNP(var, database)
+            rowAnnotated, rowAnnotation = isAnnotatedSNP(var, databases)
             datab = str(rowAnnotation)
             # build dict to insert
             #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
@@ -1288,7 +1289,7 @@ def main():
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
-    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.database, config.filters, config.regions)
+    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions)
     printOutput(config, str(config.outputDir), knownFeatures, gas, varDF)
     
     ## ## ##
