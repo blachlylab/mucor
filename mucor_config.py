@@ -153,9 +153,9 @@ def getJSONDict(args, proj_dir):
                     json_dict['regions'].append(i)
             else:
                 abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
-    json_dict['database'] = []
-    for i in str(args.database).split(','):
-        json_dict['database'].append(os.path.expanduser(i))
+    json_dict['databases'] = []
+    for i in str(args.databases).split(','):
+        json_dict['databases'].append(os.path.expanduser(i))
     json_dict['outputFormats'] = []
     for i in str(args.output_type).split(','):
         json_dict['outputFormats'].append(str(i).lower())
@@ -203,7 +203,7 @@ def main():
     print
     parser = argparse.ArgumentParser()
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
-    parser.add_argument("-db", "--database", default=[], help="Comma separated list of known SNV databases in VCF format")
+    parser.add_argument("-dbs", "--databases", default=[], help="Comma separated list of variant databases in VCF format")
     parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names")
     parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find output")
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
@@ -226,8 +226,8 @@ def main():
     args = parser.parse_args()
     if not os.path.exists(args.gff):
         abortWithMessage("Could not find GFF file {0}".format(args.gff))
-    if args.database:
-        for db in str(args.database).split(','):
+    if args.databases:
+        for db in str(args.databases).split(','):
             if not os.path.exists(os.path.expanduser(db)):
                 abortWithMessage("Could not find SNV DB file {0}".format(db))
     if not args.project_directory or not os.path.exists(args.project_directory):
