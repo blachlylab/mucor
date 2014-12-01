@@ -9,6 +9,7 @@ import gzip
 import pdb
 from collections import defaultdict
 import time
+import os
 import sys
 try:
     import tabix
@@ -29,61 +30,63 @@ def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
     exit(2)
 
-def isAnnotatedSNP(var, dbs):
+def dbLookup(var, dbs):
     '''
     Check if the input mutation exists in any of the input databases
-    Returns a boolean true/false, as well as a string of rs numbers
-        If the mutation does not exist in any database, the returned rs number is "?"
-        Better than '' when printing output
+    Returns:
+        a dictionary {'database source' => 'entry ID (e.g. rs#)'}
+
+        If the mutation does not exist in any database, the returned id number is "?"
+        Better than '' when printing output // TO DO: consider '.' or removal entirely
     '''
-    chrom = str(var.pos.chrom)
-    '''
-    old int tabix: 
-    try:
-        chrom = int(str(var.pos.chrom).strip('chr'))
-    except:
-        if str(var.pos.chrom).strip('chr') == "X":
-            chrom = int(23)
-        elif str(var.pos.chrom).strip('chr') == "Y":
-            chrom = int(24)
-    '''
+
     if 'tabix' not in sys.modules:
-        return False, str('?')
-    try:
-        chrom
-    except:
-        # chromosome is undefined; not a number, not an X or a Y. 
-        #     This includes chrM and alternative contigs
-        return False, str('?')
-        pass
+        return False, str('disabled')
+
     spos = int(var.pos.pos - 1)     # start position
     epos = int(var.pos.pos)         # end position
-    ref = var.ref
-    alt = var.alt
-    datab = ""
+
+    dbEntries = {}
+
     for db in dbs:
-        if not bool(db):
+        if not os.path.exists(db):
             pass
         else:
-            if str(db).split('.')[-1] == str("gz"):
-                database = gzip.open(db)
-            elif str(db).split('.')[-1] == str("vcf"):
+            # 'source' is a variable used to title the column in the output
+            # it defaults to the database VCF filename, but if a source= pragma
+            # is present in the VCF header, it will use that instead
+            source = os.path.split(db)[1]
+            if os.path.splitext(db)[1] == ".gz":
+                try:
+                    database = gzip.open(db)
+                except:
+                    print("WARNING: could not open {}".format(db))
+                    continue
+            elif os.path.splitext(db)[1] == ".vcf":
                 abortWithMessage("Error: database file {0} must compressed with bgzip".format(db))
             else: abortWithMessage("Error opening database files: {0}".format(db))
+            
             try:
                 row = database.readline()
             except StopIteration: 
                 print("Empty file {}".format(db))
+
+            # read the pragma lines;
+            # if the optional source= pragma is present,
+            # store it instead of filename
             while str(row)[0:2] == '##':
                 if str("source=") in str(row):
                     source = str(row).split("=")[1].strip()
                 row = database.readline()
+
             tb = tabix.open(db)
-            if len(str(alt).split(',')) >= 1:
+            if len(str(var.alt).split(',')) >= 1:
                 for row in tb.query(chrom, spos, epos):
-                    if str(row[3]) == ref and str(row[4]) in str(alt).split(','):
-                        datab += str(row[2]) + ", "
-    if str(datab) != "":
-        return True, str(datab.strip(', '))
-    elif str(datab) == "":
-        return False, str('?')
+                    if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
+                        # 3rd column (zero indexed = [2])
+                        # in a VCF is the ID
+                        dbEntries[source] = row[2]
+                    else:
+                        dbEntries[source] = '?'     # TO DO: Consider change to '.' or removal entirely
+
+    return dbEntries

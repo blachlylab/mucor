@@ -44,7 +44,7 @@ from variant import Variant
 from mucorfeature import MucorFeature
 import output
 from config import Config
-from databases import isAnnotatedSNP 
+from databases import dbLookup 
 
 class Info:
     '''Program info: logo, version, and usage'''
@@ -744,25 +744,42 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             pos = int(position)
             feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             sample = filename2samples[str(fn.split('/')[-1])]
-            source = fn.split('/')[-1]
-            rowAnnotated, rowAnnotation = isAnnotatedSNP(var, databases)
-            datab = str(rowAnnotation)
+            source = os.path.split(fn)[1]
+            dbEntries = dbLookup(var, databases)
+            
             # build dict to insert
-            #columns=('chr','pos','ref','alt','vf','dp','gene','effect','sample','source')
-            vardata = dict(zip( ['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'], \
-                                [ chr , pos , ref , alt , vf , dp , feature , effect , fc , datab , sample , source ])) 
-            # add to variants data frame dictionary
+            # Step 1: define the columns and their values
+            # Step 1b.The database columns are variable, ranging from zero to many
+            #         and must be inserted dynamically
+            # Step 2. zip the column names and column values together into a dictionary
+            # Step 3. Add this round to the master variants data frame dictinoary
+
+            columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
+            values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
+
+            for dbName in sort(dbEntries.keys()):
+                columns.append(dbName)
+                values.append(dbEntries[dbName])
+            columns += ['sample','source']
+            values  += [ sample,  source ]
+
+            vardata = dict(zip( columns, values ))
+
             for key in vardata.keys():
                 varD[key].append(vardata[key])
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
+    
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
     # Removing columns from the following 'columns' list will mask them from output in allvars.txt
-    varDF = pd.DataFrame(varD, columns=['chr','pos','ref','alt','vf','dp','feature','effect','fc','datab','sample','source'])
+
+    varDF = pd.DataFrame(varD, columns=columns)
+    
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos = varDF.pos.astype(int)
+    
     return varDF, knownFeatures, gas 
 
 def printRunInfo(config, outputDirName):
@@ -785,6 +802,36 @@ def printRunInfo(config, outputDirName):
     ofRunInfo.write("        Post-filter: \n")
     '''
     ofRunInfo.close()
+    return True
+
+def printCounts2(outputDirName, varDF):
+    '''
+    Print counts per feature
+    Replacement function
+    '''
+
+    # ============================================================
+    # counts.txt
+    try:
+        ofCounts = open(outputDirName + "/counts.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+    grouped = varDF.groupby('feature')
+
+    numHits = grouped['sample'].count()
+    numHits.name = 'numHits'
+
+    uniqueHits = grouped['sample'].count().groupby(level=0).count()
+    uniqueHits.name = 'uniqueHits'
+
+    numSamples = grouped['sample'].nunique()
+    numSamples.name = 'numSamples'
+
+    # TO DO: Construct DF from the 3 columns
+    # TO DO: Write the DF to ofCounts
+    
+    return True
 
 def printCounts(outputDirName, knownFeatures):
     '''
@@ -821,9 +868,31 @@ def printCounts(outputDirName, knownFeatures):
             ofCounts.write(str(knownFeatures[feature.name].numUniqueSamples()) + "\n")
 
             nrow += 1
-    
-    print("\t{0}: {1} rows".format(ofCounts.name, nrow))
+
     ofCounts.close()
+    print("\t{0}: {1} rows".format(ofCounts.name, nrow))
+    return True
+def printVariantDetails2(outputDirName, knownFeatures, varDF, numSamples):
+    '''
+    Replacement function to print all information about each mutation,
+    combining all mutations (irrespective of in how many samples they appear)
+    into a single row
+    '''
+
+    # =========================================================
+    # variant_details.txt
+    try:
+        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+    # Group by (chr, pos)
+    grouped = varDF.groupby('chr', 'pos')
+    # Agg ?
+    grouped.to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
+
+
+    return True
 
 def printVariantDetails(outputDirName, knownFeatures, varDF, total):
     '''
@@ -885,6 +954,7 @@ def printVariantDetails(outputDirName, knownFeatures, varDF, total):
                 
     ofVariantDetails.close()
     print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
+    return True
 
 def printLongVariantDetails(outputDirName, knownFeatures, varDF, total):
     '''
@@ -947,6 +1017,7 @@ def printLongVariantDetails(outputDirName, knownFeatures, varDF, total):
                 
     ofLongVariantDetails.close()
     print("\t{0}: {1} rows".format(ofLongVariantDetails.name, nrow))
+    return True
 
 def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
@@ -1033,6 +1104,7 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                     return
     workbook.save(outputDirName + '/variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
+    return True
 
 def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
@@ -1123,6 +1195,7 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
                 
     workbook.save(outputDirName + '/long_variant_details.xls')
     print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), nrow))
+    return True
 
 def printVariantBed(outputDirName, knownFeatures):
     '''
@@ -1149,6 +1222,7 @@ def printVariantBed(outputDirName, knownFeatures):
                 nrow += 1
     ofVariantBeds.close()
     print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
+    return True
 
 def getMetricsVCF(var, sourcefile):
     ''' 
@@ -1171,7 +1245,6 @@ def getMetricsVCF(var, sourcefile):
         return 0, 0
     else:
         abortWithMessage("There should be a depth AND variant frequency for this mutation. One is missing.")
-
 
 def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
     ''' 
@@ -1228,7 +1301,7 @@ def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
                 nrow += 1
     ofBigVCF.close()
     print("\t{0}: {1} rows".format(ofBigVCF.name, nrow))
-
+    return True
 
 def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     '''Output statistics and variant details to the specified output directory.'''
