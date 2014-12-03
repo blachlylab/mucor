@@ -81,7 +81,7 @@ def dbLookup(var, dbs):
 
             tb = tabix.open(db)
             if len(str(var.alt).split(',')) >= 1:
-                for row in tb.query(chrom, spos, epos):
+                for row in tb.query(var.pos.chrom, spos, epos):
                     if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
                         # 3rd column (zero indexed = [2])
                         # in a VCF is the ID

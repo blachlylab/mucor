@@ -26,6 +26,7 @@ import json
 # nonstandard modules
 import numpy as np
 import pandas as pd
+from pandas import ExcelWriter
 import HTSeq
 
 # optional modules
@@ -682,7 +683,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                 ref = row[3]
                 alt = row[4]
             elif Mutect:
-                vf, dp, position = parse_MuTectVCF(row, fieldId, header, fn) # , MuTect_Annotations)
+                vf, dp, position = parse_MuTectVCF(row, fieldId, header, fn)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
@@ -692,7 +693,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                 ref = row[3]
                 alt = row[4]
             elif Mutector:
-                vf, dp, position = parse_MuTectOUT(row, fieldId) # , MuTect_Annotations)
+                vf, dp, position = parse_MuTectOUT(row, fieldId)
                 chrom = row[0]
                 ref = row[3]
                 alt = row[4]
@@ -742,11 +743,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             # Descriptive variable names
             chr = chrom
             pos = int(position)
-            feature = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
+            features = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             sample = filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
             dbEntries = dbLookup(var, databases)
-            
+
             # build dict to insert
             # Step 1: define the columns and their values
             # Step 1b.The database columns are variable, ranging from zero to many
@@ -754,19 +755,20 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             # Step 2. zip the column names and column values together into a dictionary
             # Step 3. Add this round to the master variants data frame dictinoary
 
-            columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
-            values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
+            for feature in features.split(', '):
+                columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
+                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
 
-            for dbName in sort(dbEntries.keys()):
-                columns.append(dbName)
-                values.append(dbEntries[dbName])
-            columns += ['sample','source']
-            values  += [ sample,  source ]
+                for dbName in sorted(dbEntries.keys()):
+                    columns.append(dbName)
+                    values.append(dbEntries[dbName])
+                columns += ['sample','source']
+                values  += [ sample,  source ]
 
-            vardata = dict(zip( columns, values ))
-
-            for key in vardata.keys():
-                varD[key].append(vardata[key])
+                vardata = dict(zip( columns, values ))
+                #pdb.set_trace()
+                for key in vardata.keys():
+                    varD[key].append(vardata[key])
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
@@ -781,6 +783,12 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
     varDF.pos = varDF.pos.astype(int)
     
     return varDF, knownFeatures, gas 
+
+def getCountsAndFrequency(varDF, total):
+    mutDF = varDF.drop_duplicates(subset=['chr','pos','alt','feature'])[['chr','pos','alt','feature']] # makes a new dataframe of chr, pos, and alt; all you need to identify unique mutations
+    for i in dedupvart.iterrows(): 
+        count = len(varDF[(varDF.chr == i[1][0]) & (varDF.pos == i[1][1]) & (varDF.alt == i[1][2]) & varDF.feature == i[1][3]])
+        frequency = float(float(count)/float(total))
 
 def printRunInfo(config, outputDirName):
     '''
@@ -798,6 +806,7 @@ def printRunInfo(config, outputDirName):
     ofRunInfo.write(str(config))
     
     '''
+    TO DO: total runtime? or runtime breakdown per segment of the program?
     ofRunInfo.write("Variants Pre-filter: \n")
     ofRunInfo.write("        Post-filter: \n")
     '''
@@ -1106,6 +1115,11 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
     return True
 
+def printLongVariantDetailsXLS2(varDF, outputDirName):
+    ofLongVariantDetails = ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
+    varDF.sort(['chr','pos','feature']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
+    ofLongVariantDetails.save()
+
 def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     '''
     Similar to printVariantDetailsXLS above, but writes each instance of a mutation to a new row. 
@@ -1325,7 +1339,7 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
         printVariantBed(outputDirName, knownFeatures)
         printCounts(outputDirName, knownFeatures)
     if 'long' in config.outputFormats and 'xlwt' in sys.modules:
-        printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
+        printLongVariantDetailsXLS2(varDF, outputDirName)
     if 'longtxt' in config.outputFormats:
         printLongVariantDetails(outputDirName, knownFeatures, varDF, total)
     if 'vcf' in config.outputFormats:
