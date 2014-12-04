@@ -81,12 +81,15 @@ def dbLookup(var, dbs):
 
             tb = tabix.open(db)
             if len(str(var.alt).split(',')) >= 1:
-                for row in tb.query(var.pos.chrom, spos, epos):
-                    if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
-                        # 3rd column (zero indexed = [2])
-                        # in a VCF is the ID
-                        dbEntries[source] = row[2]
-                    else:
-                        dbEntries[source] = '?'     # TO DO: Consider change to '.' or removal entirely
-
+                dbEntries[source] = '?'     # TO DO: Consider change to '.' or removal entirely
+                try:
+                    for row in tb.query(var.pos.chrom, spos, epos):
+                        if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
+                            # 3rd column (zero indexed = [2])
+                            # in a VCF is the ID
+                            dbEntries[source] = row[2]
+                except tabix.TabixError:
+                    pass
+                    #there are no mutations on this variant's contig, in this particular database 
+                        
     return dbEntries

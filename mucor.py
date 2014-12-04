@@ -551,7 +551,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
     #
     # However, it is MUCH faster to initially store them in a python Dict
     # Then convert to the pandas DF at the end
-    varD = {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
+    varD = defaultdict(list) # {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
     
     if regions: # has the user specified any particular regions or region files to focus on?
         regionDict = defaultdict(set)
@@ -1377,6 +1377,7 @@ def main():
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
     varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions)
+
     printOutput(config, str(config.outputDir), knownFeatures, gas, varDF)
     
     ## ## ##
