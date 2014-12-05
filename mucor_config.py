@@ -234,7 +234,7 @@ def main():
             try:
                 if not os.path.exists(os.path.expanduser(db.split(':')[1])):
                     abortWithMessage("Could not find SNV DB file {0}".format(db.split(':')[1]))
-            except IndexError:
+            except IndexError: # user did not give a name and path, separated by colon
                 abortWithMessage("Cannot process {0}\n\tDatabase input must be colon delimited as, 'database_name:database_path'".format(db))
     if not args.project_directory or not os.path.exists(args.project_directory):
         print("Project directory not found; using CWD")
