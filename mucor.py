@@ -198,11 +198,14 @@ def parseJSON(json_config):
     config.fast = JD['fast']
     config.gff = JD['gff']
     config.outputFormats = JD['outputFormats']
+    #pdb.set_trace()
     # JSON dict represents empty database as a list of 1 unicode list. Cannot appropriately cast it as a bool, because it returns True. 
-    if str(JD['databases']) == str("[u'[]']"):
-        config.databases = []
-    else:
+    if JD['databases']:
         config.databases = JD['databases']
+    '''
+    else:
+        config.databases = defaultdict()
+    '''
     if str(JD['regions']):
         config.regions = JD['regions']
     else:

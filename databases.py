@@ -48,14 +48,13 @@ def dbLookup(var, dbs):
 
     dbEntries = {}
 
-    for db in dbs:
+    for source, db in dbs.items():
         if not os.path.exists(db):
             pass
         else:
             # 'source' is a variable used to title the column in the output
             # it defaults to the database VCF filename, but if a source= pragma
             # is present in the VCF header, it will use that instead
-            source = os.path.split(db)[1]
             if os.path.splitext(db)[1] == ".gz":
                 try:
                     database = gzip.open(db)
@@ -70,14 +69,6 @@ def dbLookup(var, dbs):
                 row = database.readline()
             except StopIteration: 
                 print("Empty file {}".format(db))
-
-            # read the pragma lines;
-            # if the optional source= pragma is present,
-            # store it instead of filename
-            while str(row)[0:2] == '##':
-                if str("source=") in str(row):
-                    source = str(row).split("=")[1].strip()
-                row = database.readline()
 
             tb = tabix.open(db)
             if len(str(var.alt).split(',')) >= 1:
