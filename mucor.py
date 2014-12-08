@@ -43,6 +43,7 @@ except ImportError:
 import mucorfilters as mf
 from variant import Variant
 from mucorfeature import MucorFeature
+from inputs import *
 import output
 from config import Config
 from databases import dbLookup 
@@ -311,179 +312,6 @@ def parseRegionBed(regionfile, regionDictIn):
         regionDict[chrom].add((start,end))
     return regionDict
 
-def parse_MiSeq(row, fieldId, header):
-    FC = str('')
-    EFF = str('')
-    for i in row[fieldId['INFO']].split(';'):
-        if i.startswith("DP="):
-            DP = i.split('=')[1]
-        if i.startswith("FC="):
-            global SnpEff_switch
-            SnpEff_switch = bool(True)
-            for j in i.split('=')[1].split(','):
-                if str(j.split('_')[0]) not in str(FC):
-                    FC += str(j.split('_')[0]) + ";"
-                try:
-                    if str(j.split('_')[1]) not in str(EFF):
-                        EFF += str(j.split('_')[1]) + ";"
-                except:
-                    pass
-        elif str(i) == "EXON":
-            FC += 'EXON'
-    if not FC:
-        FC = str("?")
-    if not EFF:
-        EFF = str("?")
-    k = 0
-    for i in row[fieldId['FORMAT']].split(':'):
-        if str(i) == "VF":
-            VF = float( row[fieldId[header[-1]]].split(':')[k] )
-        '''
-        #for when vf is not in the format column, but AD is
-        if str(i) == "AD" and not DP or not VF:
-            DP = 0
-            RD = int(row[fieldId[header[-1]]].split(':')[k].split(',')[0])
-            AD = int(row[fieldId[header[-1]]].split(':')[k].split(',')[1])
-            DP = int(RD) + int(AD)
-        '''
-        k += 1
-
-    position = int(row[fieldId['POS']])
-    return VF, DP, position, EFF, FC
-
-def parse_IonTorrent(row, fieldId, header):
-    for i in row[fieldId['INFO']].split(';'):
-        if i.startswith("AO="):
-            tempval = i.split('=')[1]
-        if i.startswith("RO="):
-            RO = i.split('=')[1]
-        if i.startswith("DP="):
-            DP = i.split("=")[1]
-    if str(',') in str(tempval):
-        tempval2 = [int(numeric_string) for numeric_string in tempval.split(',')]
-        try:
-            AO = sum(tempval2)
-        except:
-            abortWithMessage("AO should be an int, or a list of ints: AO = {0}/".format(tempval2))
-    else:
-        AO = tempval
-    VF = float(float(AO)/float(float(RO) + float(AO)))
-    position = int(row[fieldId['POS']])
-    for i in str(row[fieldId['ALT']]).split(','):
-        if len(str(row[fieldId['REF']])) > len(i):
-            #this is a deletion in Ion Torrent data
-            position = int(row[fieldId['POS']])
-            break
-    return VF, DP, position
-
-def parse_MuTectOUT(row, fieldId): 
-    VF = row[fieldId['tumor_f']]
-    DP = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
-    position = int(row[fieldId['position']])
-
-    return VF, DP, position 
-    
-def parse_MuTectVCF(row, fieldId, header, fn): 
-    j = 0
-    for i in header:
-        if str(i) not in ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'none']: # This line should detect if the sample id is in the line.
-            tmpsampID = i
-    for i in row[fieldId['FORMAT']].split(':'):
-        if i == "FA":
-            VF = row[fieldId[tmpsampID]].split(':')[j]
-        elif i == "DP":
-            DP = row[fieldId[tmpsampID]].split(':')[j]
-        j+=1
-    position = int(row[fieldId['POS']])
-
-    return VF, DP, position 
-
-def parse_SomaticIndelDetector(row, fieldId, header):
-    j = 0
-    # Below attempts to grab sample ID. 
-    # assumes that sample ID is the final column in the header. always true? 
-    # if not always true, adopt the parse_mutect solution here as well
-    tmpsampID = header[-1]
-    
-    for i in row[fieldId['FORMAT']].split(':'):
-        if i == "AD":
-            ALT_count = row[fieldId[tmpsampID]].split(':')[j].split(',')[1]
-        elif i == "DP":
-            DP = row[fieldId[tmpsampID]].split(':')[j]
-            VF = float( float(ALT_count)/float(DP) )
-        j+=1
-    position = int(row[fieldId['POS']])
-    return VF, DP, position
-
-def parse_SamTools(row, fieldId, header):
-    position = int(row[fieldId['POS']])
-    for i in row[fieldId['INFO']].split(';'):
-        if i.startswith("DP4="):
-            j = i.split('=')[1].split(',')
-            ref = int(int(j[0]) + int(j[1]))
-            alt = int(int(j[2]) + int(j[3]))
-            DP = int(int(ref) + int(alt))
-            VF = float( float(alt)/float(DP) )
-            return VF, DP, position
-
-def parse_VarScan(row, fieldId, header):
-    j = 0
-    position = int(row[fieldId['POS']])
-    for i in row[fieldId['FORMAT']].split(':'):
-        if str(i) == "DP":
-            DP = int(row[fieldId[header[-1]]].split(':')[j])
-        if str(i) == "FREQ":
-            VF = float(float(str(row[fieldId[header[-1]]].split(':')[j]).strip('%'))/float(100))
-        j += 1
-    return VF, DP, position
-
-def parse_HapCaller(row, fieldId, header):
-    j = 0
-    position = int(row[fieldId['POS']])
-    for i in row[fieldId['FORMAT']].split(':'):
-        if str(i) == "DP":
-            DP = int(row[fieldId[header[-1]]].split(':')[j])
-        if str(i) == "AD":
-            AD = str(row[fieldId[header[-1]]].split(':')[j])
-            if str(',') in AD:
-                ref = int(AD.split(',')[0])
-                alt = int(AD.split(',')[1])
-                VF = float( float(alt)/(float(ref) + float(alt)) )
-            else:
-                abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or VF".format(header[-1]))
-        j += 1
-    return VF, DP, position
-
-def parse_FreeBayes(row, fieldId, header):
-    j = 0
-    position = int(row[fieldId['POS']])
-    for i in row[fieldId['FORMAT']].split(':'):
-        if str(i) == "DP":
-            DP = int(row[fieldId[header[-1]]].split(':')[j])
-        if str(i) == "RO":
-            RO = int( str(row[fieldId[header[-1]]].split(':')[j]) )
-        if str(i) == "AO":
-            AO = int(  sum([ int(x) for x in str(row[fieldId[header[-1]]].split(':')[j]).split(',')]) )
-        j += 1
-    VF = float( float(AO)/float(AO + RO) )
-    return VF, DP, position
-
-def parse_MAF(row, fieldId, header):
-    position = int(str(row[fieldId['Start_position']]).split('.')[0]) # case sensitive. what if, 'Start_Position' instead? case-insensitive hash lookup, or make everything lowercase befor making comparisons?
-    DP = int(str(row[fieldId['TTotCov']]).split('.')[0])
-    VF = float( float(row[fieldId['TVarCov']])/float(DP) )
-    chrom = str(row[fieldId['Chromosome']])
-    ref =  str(row[fieldId['Reference_Allele']])
-    alt = str(row[fieldId['Tumor_Seq_Allele2']])
-    if ref == "-":
-        ref = ""
-    if alt == "-":
-        alt = ""
-    return VF, DP, position, chrom, ref, alt
-
-#def parse_GVF(row, fieldId, header):
-#    position = 
-
 def filterRow(row, fieldId, filters, kind):
     '''
     returning True means this row will be filtered out [masked]
@@ -511,7 +339,7 @@ def inRegionDict(chrom, start, end, regionDict):
                 return True
     return False
 
-def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
+def skipThisIndel(var, knownFeatures, featureName):
     '''
     Input a mutation and the current list of known mutations and features
     If this mutation already exists in another form, returns True, along with the existing ref and alt.
@@ -521,10 +349,10 @@ def skipThisIndel(ref, alt, knownFeatures, featureName, position, var):
     '''
     if len(var.ref) != len(var.alt):
         for kvar in knownFeatures[featureName].variants: # kvar --> known variant
-            if kvar.pos.pos == position and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
-                return True, kvar.ref, kvar.alt
+            if kvar.pos.pos == var.pos.pos and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
+                return (kvar.ref, kvar.alt)
                 break
-    return False, '', ''
+    return tuple()
 
 def indelDelta(ref, alt):
     ''' Detects the inserted or deleted bases of an indel'''
@@ -659,69 +487,48 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                         for j in eff.split(','):
                             muts.append(str(j.split('|')[3]))
                             loca.append(str(j.split('(')[0]).replace('EFF=',''))
-                for guy in set(muts):
-                    if str(guy) != "":
-                        effect += str(guy) + ";"
-                for guy in set(loca):
-                    if str(guy) != "":
-                        fc += str(guy) + ";"
+                for mut in set(muts):
+                    if str(mut) != "":
+                        effect += str(mut) + ";"
+                for loc in set(loca):
+                    if str(loc) != "":
+                        fc += str(loc) + ";"
             except KeyError:
                 pass
 
             # parse the row of data, depending on the type of data
-            if MiSeq:
-                vf, dp, position, effect, fc = parse_MiSeq(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif IonTorrent:
-                vf, dp, position = parse_IonTorrent(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif Mutect:
-                vf, dp, position = parse_MuTectVCF(row, fieldId, header, fn)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif SomaticIndelDetector:
-                vf, dp, position = parse_SomaticIndelDetector(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif Mutector:
-                vf, dp, position = parse_MuTectOUT(row, fieldId)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif Samtools:
-                vf, dp, position = parse_SamTools(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif VarScan:
-                vf, dp, position = parse_VarScan(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif HapCaller:
-                vf, dp, position = parse_HapCaller(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif FreeBayes:
-                vf, dp, position = parse_FreeBayes(row, fieldId, header)
-                chrom = row[0]
-                ref = row[3]
-                alt = row[4]
-            elif MAF:
-                vf, dp, position, chrom, ref, alt = parse_MAF(row, fieldId, header)
+            InputParser.row = row
+            InputParser.fieldId = fieldId
+            InputParser.header = header
+            InputParser.fn = fn
+            InputParser.eff = effect
+            InputParser.fc = fc 
 
+            if MiSeq:
+                var = parse_MiSeq(InputParser)                
+            elif IonTorrent:
+                var = parse_IonTorrent(InputParser)                
+            elif Mutect:
+                var = parse_MuTectVCF(InputParser)                
+            elif SomaticIndelDetector:
+                var = parse_SomaticIndelDetector(InputParser)
+            elif Mutector:
+                var = parse_MuTectOUT(InputParser)
+            elif Samtools:
+                var = parse_SamTools(InputParser)
+            elif VarScan:
+                var = parse_VarScan(InputParser)
+            elif HapCaller:
+                var = parse_HapCaller(InputParser)
+            elif FreeBayes:
+                var = parse_FreeBayes(InputParser)
+            elif MAF:
+                var = parse_MAF(InputParser)
             else:
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
             if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
                 continue
-            var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+            #var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
 
             ###########################################
             # find bin for variant location
@@ -729,18 +536,24 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             if resultSet:                   # which I'll use as a key on the knownFeatures dict
                 #                           # and each feature with matching ID gets allocated the variant
                 for featureName in resultSet:
-                    skipDupIndel, kvarref, kvaralt = skipThisIndel(var.ref, var.alt, knownFeatures, featureName, position, var)
-                    if bool(skipDupIndel):
+                    kvar = skipThisIndel(var, knownFeatures, featureName)
+                    if bool(kvar):
                         # Sanity check to see what indels are being overwritten by existing vars
-                        var.ref = kvarref
-                        var.alt = kvaralt
+                        var.ref = kvar[0]
+                        var.alt = kvar[1]
                     
                     knownFeatures[featureName].variants.add(var)
             
             # Descriptive variable names
-            chr = chrom
-            pos = int(position)
+            chr = var.pos.chrom
+            pos = int(var.pos.pos)
+            ref = var.ref
+            alt = var.alt 
+            vf = var.frac
+            dp = var.dp
             features = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
+            effect = var.eff
+            fc = var.fc
             sample = filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
             dbEntries = dbLookup(var, databases)
