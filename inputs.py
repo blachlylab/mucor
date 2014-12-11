@@ -103,7 +103,7 @@ def parse_IonTorrent(InputParser):
     return var
 
 def parse_MuTectOUT(InputParser):
-''' MuTect '.out' parser function. Input: InputParser object. Output: Variant object '''
+    ''' MuTect '.out' parser function. Input: InputParser object. Output: Variant object '''
 
     row = InputParser.row
     fieldId = InputParser.fieldId
@@ -123,7 +123,7 @@ def parse_MuTectOUT(InputParser):
     return var
     
 def parse_MuTectVCF(InputParser):
-''' MuTect vcf parser function. Input: InputParser object. Output: Variant object '''
+    ''' MuTect vcf parser function. Input: InputParser object. Output: Variant object '''
 
     row = InputParser.row
     fieldId = InputParser.fieldId

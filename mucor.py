@@ -496,7 +496,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             except KeyError:
                 pass
 
-            # parse the row of data, depending on the type of data
+            # prime the InputParser object for this row
             InputParser.row = row
             InputParser.fieldId = fieldId
             InputParser.header = header
@@ -504,6 +504,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             InputParser.eff = effect
             InputParser.fc = fc 
 
+            # parse the row of data, depending on the type of data
             if MiSeq:
                 var = parse_MiSeq(InputParser)                
             elif IonTorrent:
@@ -528,7 +529,6 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                 abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
             if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
                 continue
-            #var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
 
             ###########################################
             # find bin for variant location
