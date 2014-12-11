@@ -16,7 +16,7 @@ class Config(object):
             self.outputFormats = []
             self.samples = []
             self.inputFiles = []    # derived from samples
-            self.databases = []
+            self.databases = {}
             self.regions = []
 
     def __str__(self):

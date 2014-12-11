@@ -557,6 +557,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             sample = filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
             dbEntries = dbLookup(var, databases)
+            count = 0 # initialize this database column now to save time later
 
             # build dict to insert
             # Step 1: define the columns and their values
@@ -572,11 +573,10 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                 for dbName in sorted(dbEntries.keys()):
                     columns.append(dbName)
                     values.append(dbEntries[dbName])
-                columns += ['sample','source']
-                values  += [ sample,  source ]
+                columns += ['count', 'sample','source']
+                values  += [ count,   sample,  source ]
 
                 vardata = dict(zip( columns, values ))
-                #pdb.set_trace()
                 for key in vardata.keys():
                     varD[key].append(vardata[key])
 
@@ -584,13 +584,13 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
-    # Removing columns from the following 'columns' list will mask them from output in allvars.txt
-
+    # Removing columns from the following 'columns' list will mask them from output
     varDF = pd.DataFrame(varD, columns=columns)
-    
+    print("Finished reading\nAssessing total variant counts")
+    varDF['count'] = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])['sample'].transform(len)
     # Clean up variant dataframe a little
     # position should be integer, not float
-    varDF.pos = varDF.pos.astype(int)
+    varDF.pos   = varDF.pos.astype(int)
     
     return varDF, knownFeatures, gas 
 
@@ -691,11 +691,35 @@ def printCounts(outputDirName, knownFeatures):
     ofCounts.close()
     print("\t{0}: {1} rows".format(ofCounts.name, nrow))
     return True
-def printVariantDetails2(outputDirName, knownFeatures, varDF, numSamples):
+
+def collapseVariantDetails(group):
+    '''
+    Pandas operations to support the printVariantDetails family of functions. 
+    Collapses variant rows that share the same contig, position, ref allele, alt allele, and feature.
+    Input: a pandas groupby object
+    Output: a pandas dataframe object
+    '''
+    outvals = []
+    columns = list(group.keys().values)
+    for column in columns:
+        outstring = ''
+        if column in ['vf', 'dp', 'sample', 'source']:  # the only columns that need to be concatenated 
+                                                        # the others are uniquified and "always" yield 1 value
+            for i in group[column].values:
+                outstring += str(i) + ", "
+            outvals.append( outstring[:-2] )            # trim the extra ', ' off the end of outstring 
+        else:
+            outvals.append( group[column].unique() )
+    outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
+    return outDF
+
+def printVariantDetails2(outputDirName, varDF, numSamples):
     '''
     Replacement function to print all information about each mutation,
     combining all mutations (irrespective of in how many samples they appear)
     into a single row
+    Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
+          indels may have the same chr, pos, but different ref/alt
     '''
 
     # =========================================================
@@ -704,12 +728,12 @@ def printVariantDetails2(outputDirName, knownFeatures, varDF, numSamples):
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
     except:
         abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-    # Group by (chr, pos)
-    grouped = varDF.groupby('chr', 'pos')
-    # Agg ?
-    grouped.to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
-
+    # Group by (chr, pos, ref, alt, feature)
+    grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
+    # apply collapsing function to each pandas group
+    out = grouped.apply(collapseVariantDetails)
+    # print the new, collapsed dataframe to a file
+    out.sort(['chr','pos','feature']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
 
     return True
 
@@ -925,6 +949,30 @@ def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
     return True
 
+def printVariantDetailsXLS2(outputDirName, varDF, numSamples):
+    '''
+    Replacement function to print all information about each mutation,
+    combining all mutations (irrespective of in how many samples they appear)
+    into a single row
+    Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
+          indels may have the same chr, pos, but different ref/alt
+    '''
+
+    # =========================================================
+    # variant_details.xls
+    try:
+        ofVariantDetails = ExcelWriter(str(outputDirName) + '/variant_details.xls')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    # Group by (chr, pos, ref, alt, feature)
+    grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
+    # apply collapsing function to each pandas group
+    out = grouped.apply(collapseVariantDetails)
+    # print the new, collapsed dataframe to a file
+    out.sort(['chr','pos','feature']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
+    ofVariantDetails.save()
+    return True
+
 def printLongVariantDetailsXLS2(varDF, outputDirName):
     ofLongVariantDetails = ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
     varDF.sort(['chr','pos','feature']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
@@ -963,7 +1011,6 @@ def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
     for feature in sortedList:
         if knownFeatures[feature.name].variants:
             for var in knownFeatures[feature.name].uniqueVariants():
-                #pdb.set_trace()
                 for j in range(len(var.dp.split(','))):
                     ncol = 0
                     ofLongVariantDetails.write(nrow, ncol, str(feature.name))
@@ -1139,21 +1186,24 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     if 'counts' in config.outputFormats:
         printCounts(outputDirName, knownFeatures)
     if 'txt' in config.outputFormats:
-        printVariantDetails(outputDirName, knownFeatures, varDF, total)
+        printVariantDetails2(outputDirName, varDF, total)
     if 'bed' in config.outputFormats:
-        printVariantBed(outputDirName, knownFeatures)
+        print("bed format not yet supported")
+        #printVariantBed(outputDirName, knownFeatures)
     if 'xlwt' in config.outputFormats and 'xlwt' in sys.modules:
         printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
     if 'default' in config.outputFormats:
-        if 'xlwt' in sys.modules: printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
-        printVariantBed(outputDirName, knownFeatures)
+        printVariantDetails2(outputDirName, varDF, total)
+        if 'xlwt' in sys.modules: printVariantDetailsXLS2(outputDirName, varDF, total)
         printCounts(outputDirName, knownFeatures)
     if 'long' in config.outputFormats and 'xlwt' in sys.modules:
         printLongVariantDetailsXLS2(varDF, outputDirName)
     if 'longtxt' in config.outputFormats:
-        printLongVariantDetails(outputDirName, knownFeatures, varDF, total)
+        print("long text format not yet supported")
+        #printLongVariantDetails(outputDirName, knownFeatures, varDF, total)
     if 'vcf' in config.outputFormats:
-        printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
+        print("long vcf format not yet supported")
+        #printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
