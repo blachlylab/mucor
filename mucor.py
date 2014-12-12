@@ -30,10 +30,13 @@ from pandas import ExcelWriter
 import HTSeq
 
 # optional modules
+'''
+excel is now printed directly using pandas - no need for xlwt module
 try:
     import xlwt
 except ImportError:
     print("Excel writer module xlwt not found; Microsoft Excel output disabled")
+'''
 try:
     import tabix
 except ImportError:
@@ -622,13 +625,6 @@ def printRunInfo(config, outputDirName):
     ofRunInfo.write(Info.versionInfo + "\n")
     ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
     ofRunInfo.write(str(config))
-    
-    '''
-    TO DO: total runtime? or runtime breakdown per segment of the program?
-    ofRunInfo.write("Variants Pre-filter: \n")
-    ofRunInfo.write("        Post-filter: \n")
-    '''
-    ofRunInfo.close()
     return True
 
 def printCounts2(outputDirName, varDF):
@@ -700,29 +696,11 @@ def printCounts(outputDirName, knownFeatures):
     print("\t{0}: {1} rows".format(ofCounts.name, nrow))
     return True
 
-def collapseVariantDetails(group):
-    '''
-    Pandas operations to support the printVariantDetails family of functions. 
-    Collapses variant rows that share the same contig, position, ref allele, alt allele, and feature.
-    Input: a pandas groupby object
-    Output: a pandas dataframe object
-    '''
-    outvals = []
-    columns = list(group.keys().values)
-    for column in columns:
-        outstring = ''
-        if column in ['vf', 'dp', 'sample', 'source']:  # the only columns that need to be concatenated 
-                                                        # the others are uniquified and "always" yield 1 value
-            for i in group[column].values:
-                outstring += str(i) + ", "
-            outvals.append( outstring[:-2] )            # trim the extra ', ' off the end of outstring 
-        else:
-            outvals.append( group[column].unique() )
-    outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
-    return outDF
-
 def printVariantDetails(outputDirName, varDF):
     '''
+    NOTE: Migrated to output writer object
+
+
     Replacement function to print all information about each mutation,
     combining all mutations (irrespective of in how many samples they appear)
     into a single row
@@ -747,6 +725,9 @@ def printVariantDetails(outputDirName, varDF):
 
 def printLongVariantDetails(outputDirName, varDF):
     '''
+    NOTE: Migrated to output writer object
+
+
     Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
     Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
     
@@ -768,6 +749,9 @@ def printLongVariantDetails(outputDirName, varDF):
 
 def printVariantDetailsXLS(outputDirName, varDF):
     '''
+    NOTE: Migrated to output writer object
+
+    
     Replacement function to print all information about each mutation,
     combining all mutations (irrespective of in how many samples they appear)
     into a single row
@@ -793,6 +777,9 @@ def printVariantDetailsXLS(outputDirName, varDF):
 
 def printLongVariantDetailsXLS(outputDirName, varDF):
     '''
+    NOTE: Migrated to output writer object
+
+    
     Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
     Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
     
@@ -919,8 +906,14 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
-
     printRunInfo(config, outputDirName)
+
+    ow = output.Writer()
+    for format in config.outputFormats:
+        ow.write(varDF,format,outputDirName,config)
+
+    '''
+    Outdated if statements 
     
     if 'counts' in config.outputFormats:
         printCounts(outputDirName, knownFeatures)
@@ -942,6 +935,7 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     if 'vcf' in config.outputFormats:
         print("long vcf format not yet supported")
         #printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
+    '''
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
