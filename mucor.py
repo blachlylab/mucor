@@ -364,10 +364,19 @@ def indelDelta(ref, alt):
         # there is already a SNP at this indel location 
         return [ "", "" ]
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regions): 
+def groupCount(grp):
+    ''' 
+    function to count the number of samples that share the same mutation
+    Input: Acts on a pandas groupby object
+    Oputput: returns a DataFrame
+    '''
+    grp['count'] = len(grp['sample'])
+    return grp
+
+def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regions, total): 
     '''
     Read in all input files
-    Log mutations in the variant dataframe 
+    Record mutations in the variant dataframe 
     '''
     startTime = time.clock()
 
@@ -557,7 +566,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             sample = filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
             dbEntries = dbLookup(var, databases)
-            count = 0 # initialize this database column now to save time later
+            count = 0 # initialize this database column now to save for later
+            freq = 0.0 # initialize this database column now to save for later
 
             # build dict to insert
             # Step 1: define the columns and their values
@@ -567,14 +577,15 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             # Step 3. Add this round to the master variants data frame dictinoary
 
             for feature in features.split(', '):
+                # Removing columns from the following 'columns' list will mask them from output
                 columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
                 values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
 
                 for dbName in sorted(dbEntries.keys()):
                     columns.append(dbName)
                     values.append(dbEntries[dbName])
-                columns += ['count', 'sample','source']
-                values  += [ count,   sample,  source ]
+                columns += ['count', 'freq', 'sample','source']
+                values  += [ count,   freq,   sample,  source ]
 
                 vardata = dict(zip( columns, values ))
                 for key in vardata.keys():
@@ -584,21 +595,18 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
-    # Removing columns from the following 'columns' list will mask them from output
     varDF = pd.DataFrame(varD, columns=columns)
-    print("Finished reading\nAssessing total variant counts")
-    varDF['count'] = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])['sample'].transform(len)
+    # Dataframe operation to count the number of samples that exhibit each mutation
+    varDF = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature']).apply(groupCount)
+    # Divide the count for each row in varDF by the total sample count from the JSON config file. Represents the percent of the input samples that exhibit each mutation.
+    freqdict = {}
+    for i in set(varDF['count'].values):
+        freqdict[i] = float(i)/float(total)
+    varDF['freq'] = varDF['count'].map(freqdict)
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos   = varDF.pos.astype(int)
-    
     return varDF, knownFeatures, gas 
-
-def getCountsAndFrequency(varDF, total):
-    mutDF = varDF.drop_duplicates(subset=['chr','pos','alt','feature'])[['chr','pos','alt','feature']] # makes a new dataframe of chr, pos, and alt; all you need to identify unique mutations
-    for i in dedupvart.iterrows(): 
-        count = len(varDF[(varDF.chr == i[1][0]) & (varDF.pos == i[1][1]) & (varDF.alt == i[1][2]) & varDF.feature == i[1][3]])
-        frequency = float(float(count)/float(total))
 
 def printRunInfo(config, outputDirName):
     '''
@@ -627,10 +635,10 @@ def printCounts2(outputDirName, varDF):
     '''
     Print counts per feature
     Replacement function
+
+    Output: counts.txt
     '''
 
-    # ============================================================
-    # counts.txt
     try:
         ofCounts = open(outputDirName + "/counts.txt", 'w+')
     except:
@@ -713,17 +721,17 @@ def collapseVariantDetails(group):
     outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
     return outDF
 
-def printVariantDetails2(outputDirName, varDF, numSamples):
+def printVariantDetails(outputDirName, varDF):
     '''
     Replacement function to print all information about each mutation,
     combining all mutations (irrespective of in how many samples they appear)
     into a single row
     Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
-          indels may have the same chr, pos, but different ref/alt
+          indels may have the same chr, pos, but different ref/alt\
+
+    Output: variant_details.txt
     '''
 
-    # =========================================================
-    # variant_details.txt
     try:
         ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
     except:
@@ -734,232 +742,41 @@ def printVariantDetails2(outputDirName, varDF, numSamples):
     out = grouped.apply(collapseVariantDetails)
     # print the new, collapsed dataframe to a file
     out.sort(['chr','pos','feature']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
-
+    print("\t{0}: {1} rows".format(ofVariantDetails.name, len(out)))
     return True
 
-def printVariantDetails(outputDirName, knownFeatures, varDF, total):
-    '''
-    Print all information about each mutation. Mutations are combined into 1 row per location and ref/alt, with multiple samples in the 'Source' column when necessary.
-    Output is in text format. 
-    '''
-    try:
-        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-    # =========================================================
-    # variant_details.txt
-
-    ofVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t')
-    if SnpEff_switch:
-        ofVariantDetails.write('Effect\tFC\t')
-    if database_switch:
-        ofVariantDetails.write('Annotation\t')
-    ofVariantDetails.write('Count\tFrequency\tSource\n')
-
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    nrow = 0
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            for var in knownFeatures[feature.name].uniqueVariants():
-                ofVariantDetails.write(feature.name + "\t")
-                ofVariantDetails.write(var.pos.chrom + "\t")
-                ofVariantDetails.write(str(var.pos.pos) + "\t")
-                ofVariantDetails.write(var.ref + "\t")
-                ofVariantDetails.write(var.alt + "\t")
-                ofVariantDetails.write(var.frac + "\t")
-                ofVariantDetails.write(var.dp + "\t")
-                
-                if SnpEff_switch:
-                    if str(var.eff) != str(''):
-                        ofVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
-                    else:
-                        ofVariantDetails.write(str('?') + "\t")
-                    if str(var.fc) != str(''):
-                        ofVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
-                    else:
-                        ofVariantDetails.write(str('?') + "\t")
-                if database_switch:
-                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
-                        ofVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0] + "\t") 
-                    else:
-                        tempdb = ""
-                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
-                            if str(i) not in str(tempdb):
-                                tempdb += str(i) + ","
-                        ofVariantDetails.write(tempdb.strip(',') + "\t")
-                ofVariantDetails.write(str(len(var.source.split(','))) + "\t")
-                ofVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + "\t" )
-                ofVariantDetails.write(var.source + "\n")
-                nrow += 1
-                
-    ofVariantDetails.close()
-    print("\t{0}: {1} rows".format(ofVariantDetails.name, nrow))
-    return True
-
-def printLongVariantDetails(outputDirName, knownFeatures, varDF, total):
+def printLongVariantDetails(outputDirName, varDF):
     '''
     Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
     Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
+    
+    Output: long_variant_details.txt
     '''
+
     try:
         ofLongVariantDetails = open(outputDirName + "/long_variant_details.txt", 'w+')
     except:
         abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
-    # =========================================================
-    # long_variant_details.txt
+    varDF.sort(['chr','pos','feature']).to_csv(ofLongVariantDetails, sep='\t', na_rep='?', index=False)
+    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
+    return True
 
-    ofLongVariantDetails.write('Feature\tContig\tPos\tRef\tAlt\tVF\tDP\t')
-    if SnpEff_switch:
-        ofLongVariantDetails.write('Effect\tFC\t')
-    if database_switch:
-        ofLongVariantDetails.write('Annotation\t')
-    ofLongVariantDetails.write('Count\tFrequency\tSource\n')
-
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    nrow = 0
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            for var in knownFeatures[feature.name].uniqueVariants():
-                for j in range(len(var.dp.split(','))):
-                    ofLongVariantDetails.write(feature.name + "\t")
-                    ofLongVariantDetails.write(var.pos.chrom + "\t")
-                    ofLongVariantDetails.write(str(var.pos.pos) + "\t")
-                    ofLongVariantDetails.write(var.ref + "\t")
-                    ofLongVariantDetails.write(var.alt + "\t")
-                    ofLongVariantDetails.write(var.frac.split(', ')[j] + "\t")
-                    ofLongVariantDetails.write(var.dp.split(', ')[j] + "\t")
-                    
-                    if SnpEff_switch:
-                        if str(var.eff) != str(''):
-                            ofLongVariantDetails.write(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
-                        else:
-                            ofLongVariantDetails.write(str('?') + "\t")
-                        if str(var.fc) != str(''):
-                            ofLongVariantDetails.write(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'") + "\t")
-                        else:
-                            ofLongVariantDetails.write(str('?') + "\t")
-                    if database_switch:
-                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
-                            ofLongVariantDetails.write(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0] + "\t") 
-                        else:
-                            tempdb = ""
-                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
-                                if str(i) not in str(tempdb):
-                                    tempdb += str(i) + ","
-                            ofLongVariantDetails.write(tempdb.strip(',') + "\t")
-                    ofLongVariantDetails.write(str(len(var.source.split(','))) + "\t")
-                    ofLongVariantDetails.write(str(float(len(var.source.split(',')))/float(total)) + "\t" )
-                    ofLongVariantDetails.write(var.source.split(', ')[j] + "\n")
-                    nrow += 1
-                
     ofLongVariantDetails.close()
     print("\t{0}: {1} rows".format(ofLongVariantDetails.name, nrow))
     return True
 
-def printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
-    '''
-    Identical to the printVariantDetails function above, but in XLS format instead of TXT
-    '''
-    # =========================================================
-    # variant_details.xls
-
-    workbook = xlwt.Workbook()
-    ofVariantDetails = workbook.add_sheet('Variant Details')
-    nrow = 0
-    ncol = 0
-    for column in ['Feature', 'Contig', 'Pos', 'Ref', 'Alt', 'VF', 'DP']:
-        ofVariantDetails.write(nrow, ncol, column)
-        ncol += 1
-    if SnpEff_switch:
-        for column in ['Effect', 'FC']:
-            ofVariantDetails.write(nrow, ncol, column)
-            ncol += 1
-    if database_switch:
-        ofVariantDetails.write(nrow, ncol, 'Annotation')
-        ncol += 1
-    for column in ['Count','Frequency','Source']:
-        ofVariantDetails.write(nrow, ncol, column)
-        ncol += 1
-    nrow += 1
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            for var in knownFeatures[feature.name].uniqueVariants():
-                ncol = 0
-                ofVariantDetails.write(nrow, ncol, str(feature.name))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.pos.chrom))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, int(var.pos.pos))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.ref))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.alt))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.frac))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.dp))
-                ncol += 1
-                
-                if SnpEff_switch:
-                    if str(var.eff) != str(''):
-                        ofVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
-                        ncol += 1
-                    else:
-                        ofVariantDetails.write(nrow, ncol, str('?'))
-                        ncol += 1
-                    if str(var.fc) != str(''):
-                        ofVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
-                        ncol += 1
-                    else:
-                        ofVariantDetails.write(nrow, ncol, str('?'))
-                        ncol += 1
-                if database_switch:
-                    if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
-                        ofVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0]) )
-                        ncol += 1
-                    else:
-                        tempdb = ""
-                        for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
-                            if str(i) not in str(tempdb):
-                                tempdb += str(i) + ","
-                        ofVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
-                        ncol += 1
-                ofVariantDetails.write(nrow, ncol, int(str(len(var.source.split(',')))))
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, float(float(len(var.source.split(',')))/float(total))  )
-                ncol += 1
-                ofVariantDetails.write(nrow, ncol, str(var.source))
-                ncol += 1
-                nrow += 1
-                if nrow >= 65536:
-                    throwWarning("Excel xls format cannot handle all your mutations")
-                    throwWarning("{0} output could not be completed!".format(str(outputDirName + '/variant_details.xls')))
-                    return
-    workbook.save(outputDirName + '/variant_details.xls')
-    print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), nrow))
-    return True
-
-def printVariantDetailsXLS2(outputDirName, varDF, numSamples):
+def printVariantDetailsXLS(outputDirName, varDF):
     '''
     Replacement function to print all information about each mutation,
     combining all mutations (irrespective of in how many samples they appear)
     into a single row
     Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
           indels may have the same chr, pos, but different ref/alt
+    
+    Output: variant_details.xls
     '''
 
-    # =========================================================
-    # variant_details.xls
     try:
         ofVariantDetails = ExcelWriter(str(outputDirName) + '/variant_details.xls')
     except:
@@ -971,105 +788,26 @@ def printVariantDetailsXLS2(outputDirName, varDF, numSamples):
     # print the new, collapsed dataframe to a file
     out.sort(['chr','pos','feature']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
     ofVariantDetails.save()
+    print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
     return True
 
-def printLongVariantDetailsXLS2(varDF, outputDirName):
+def printLongVariantDetailsXLS(outputDirName, varDF):
+    '''
+    Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
+    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
+    
+    Output: long_variant_details.xls
+    '''
+
     ofLongVariantDetails = ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
     varDF.sort(['chr','pos','feature']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
     ofLongVariantDetails.save()
-
-def printLongVariantDetailsXLS(outputDirName, knownFeatures, varDF, total):
-    '''
-    Similar to printVariantDetailsXLS above, but writes each instance of a mutation to a new row. 
-    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
-    '''
-    # =========================================================
-    # long_variant_details.xls
-
-    workbook = xlwt.Workbook()
-    ofLongVariantDetails = workbook.add_sheet('Long Variant Details')
-    nrow = 0
-    ncol = 0
-    for column in ['Feature', 'Contig', 'Pos', 'Ref', 'Alt', 'VF', 'DP']:
-        ofLongVariantDetails.write(nrow, ncol, column)
-        ncol += 1
-    if SnpEff_switch:
-        for column in ['Effect', 'FC']:
-            ofLongVariantDetails.write(nrow, ncol, column)
-            ncol += 1
-    if database_switch:
-        ofLongVariantDetails.write(nrow, ncol, 'Annotation')
-        ncol += 1
-    for column in ['Count','Frequency','Source']:
-        ofLongVariantDetails.write(nrow, ncol, column)
-        ncol += 1
-    nrow += 1
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            for var in knownFeatures[feature.name].uniqueVariants():
-                for j in range(len(var.dp.split(','))):
-                    ncol = 0
-                    ofLongVariantDetails.write(nrow, ncol, str(feature.name))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, str(var.pos.chrom))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, int(var.pos.pos))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, str(var.ref))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, str(var.alt))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, float((var.frac).split(', ')[j]))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, int((var.dp).split(', ')[j]))
-                    ncol += 1
-                    
-                    if SnpEff_switch:
-                        if str(var.eff) != str(''):
-                            ofLongVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.eff).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
-                            ncol += 1
-                        else:
-                            ofLongVariantDetails.write(nrow, ncol, str('?'))
-                            ncol += 1
-                        if str(var.fc) != str(''):
-                            ofLongVariantDetails.write(nrow, ncol, str(str([ x for x in set(str(var.fc).split(', '))]).replace("''","").replace(", ","").strip(']').strip('[').strip("'")))
-                            ncol += 1
-                        else:
-                            ofLongVariantDetails.write(nrow, ncol, str('?'))
-                            ncol += 1
-                    if database_switch:
-                        if len(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()) == 1:
-                            ofLongVariantDetails.write(nrow, ncol, str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()[0]) )
-                            ncol += 1
-                        else:
-                            tempdb = ""
-                            for i in [x.strip(']').strip('[') for x in str(varDF[(varDF.pos == int(var.pos.pos)) & (varDF.chr == str(var.pos.chrom)) & (varDF.ref == str(var.ref))  & (varDF.alt == str(var.alt))].datab.unique()).replace(',','').split(' ')]:
-                                if str(i) not in str(tempdb):
-                                    tempdb += str(i) + ","
-                            ofLongVariantDetails.write(nrow, ncol, str(tempdb.strip(',')))
-                            ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, int(len(var.source.split(','))))
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, float(float(len(set(var.source.split(', '))))/float(total))  )
-                    ncol += 1
-                    ofLongVariantDetails.write(nrow, ncol, str(var.source.split(', ')[j]))
-                    ncol += 1
-                    nrow += 1
-                    if nrow >= 65536:
-                        throwWarning("Excel xls format cannot handle all your mutations")
-                        throwWarning("{0} output could not be completed!".format(str(outputDirName + '/long_variant_details.xls')))
-                        return
-                
-    workbook.save(outputDirName + '/long_variant_details.xls')
-    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), nrow))
+    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
     return True
 
 def printVariantBed(outputDirName, knownFeatures):
     '''
+    ### NEEDS DF UPDATE ###
     Print bed file of the variant locations
     '''
     try:
@@ -1119,6 +857,8 @@ def getMetricsVCF(var, sourcefile):
 
 def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
     ''' 
+    ### NEEDS DF UPDATE ###
+
     Print 1 vcf file as output
     There is 1 column per sample for the information they do not share (Ex. DP, VF)
     '''
@@ -1186,21 +926,20 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     if 'counts' in config.outputFormats:
         printCounts(outputDirName, knownFeatures)
     if 'txt' in config.outputFormats:
-        printVariantDetails2(outputDirName, varDF, total)
+        printVariantDetails(outputDirName, varDF)
     if 'bed' in config.outputFormats:
         print("bed format not yet supported")
         #printVariantBed(outputDirName, knownFeatures)
     if 'xlwt' in config.outputFormats and 'xlwt' in sys.modules:
-        printVariantDetailsXLS(outputDirName, knownFeatures, varDF, total)
+        printVariantDetailsXLS(outputDirName, varDF)
     if 'default' in config.outputFormats:
-        printVariantDetails2(outputDirName, varDF, total)
-        if 'xlwt' in sys.modules: printVariantDetailsXLS2(outputDirName, varDF, total)
+        printVariantDetails(outputDirName, varDF)
+        if 'xlwt' in sys.modules: printVariantDetailsXLS(outputDirName, varDF)
         printCounts(outputDirName, knownFeatures)
     if 'long' in config.outputFormats and 'xlwt' in sys.modules:
-        printLongVariantDetailsXLS2(varDF, outputDirName)
+        printLongVariantDetailsXLS(outputDirName, varDF)
     if 'longtxt' in config.outputFormats:
-        print("long text format not yet supported")
-        #printLongVariantDetails(outputDirName, knownFeatures, varDF, total)
+        printLongVariantDetails(outputDirName, varDF)
     if 'vcf' in config.outputFormats:
         print("long vcf format not yet supported")
         #printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
@@ -1233,10 +972,11 @@ def main():
     for fn in config.inputFiles:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
+    total = len(set(config.samples))
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
 
-    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions)
+    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions, total)
 
     printOutput(config, str(config.outputDir), knownFeatures, gas, varDF)
     
