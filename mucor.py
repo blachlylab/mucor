@@ -920,7 +920,6 @@ def printOutput(config, outputDirName, knownFeatures, gas, varDF):
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
 
-    total = len(set(config.samples))                # used in frequency calculation. config.samples will use sample count as the denominator. samples.inputFiles will use file count
     printRunInfo(config, outputDirName)
     
     if 'counts' in config.outputFormats:
@@ -972,6 +971,10 @@ def main():
     for fn in config.inputFiles:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
+
+    # Total is used in frequency calculations. 
+    #   supplying config.samples will use sample count as the denominator [canonical operation, ie: comparing samples]
+    #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise having many vcf files and 1 sample ID]
     total = len(set(config.samples))
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
