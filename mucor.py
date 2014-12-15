@@ -609,216 +609,11 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos   = varDF.pos.astype(int)
+    # blank features should be more descriptive. this replaces empty strings with 'NO_FEATURE'. 
+    varDF['feature'][varDF.feature == ''] = 'NO_FEATURE'
+
     return varDF, knownFeatures, gas 
 
-def printRunInfo(config, outputDirName):
-    '''
-    Print useful information about the run, including the version, time, and configuration used
-    '''
-    try: 
-        ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-    # =========================
-    # run_info.txt
-    #
-    ofRunInfo.write(Info.versionInfo + "\n")
-    ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
-    ofRunInfo.write(str(config))
-    return True
-
-def printCounts2(outputDirName, varDF):
-    '''
-    Print counts per feature
-    Replacement function
-
-    Output: counts.txt
-    '''
-
-    try:
-        ofCounts = open(outputDirName + "/counts.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-    grouped = varDF.groupby('feature')
-
-    numHits = grouped['sample'].count()
-    numHits.name = 'numHits'
-
-    uniqueHits = grouped['sample'].count().groupby(level=0).count()
-    uniqueHits.name = 'uniqueHits'
-
-    numSamples = grouped['sample'].nunique()
-    numSamples.name = 'numSamples'
-
-    # TO DO: Construct DF from the 3 columns
-    # TO DO: Write the DF to ofCounts
-    
-    return True
-
-def printCounts(outputDirName, knownFeatures):
-    '''
-    Print counts per feature 
-    '''
-    try:
-        ofCounts = open(outputDirName + "/counts.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-    # ============================================================
-    # counts.txt
-    # make master list, then sort it by number of variants per bin
-    #
-    ofCounts.write('FeatureName\tHits\tWeightedHits\tAverageWeight\tUniqueHits\tNumSamples\n')
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    nrow = 0
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            ofCounts.write(feature.name + "\t")
-
-            ofCounts.write(str(len(knownFeatures[feature.name].variants)) + "\t")
-            
-            ofCounts.write(str(knownFeatures[feature.name].weightedVariants()) + "\t")
-            
-            ft = knownFeatures[feature.name]
-            avgWt = float(ft.weightedVariants() / float(ft.numVariants()) )
-            ofCounts.write(str(avgWt) + "\t")
-
-            ofCounts.write(str(knownFeatures[feature.name].numUniqueVariants()) + "\t")
-            
-            ofCounts.write(str(knownFeatures[feature.name].numUniqueSamples()) + "\n")
-
-            nrow += 1
-
-    ofCounts.close()
-    print("\t{0}: {1} rows".format(ofCounts.name, nrow))
-    return True
-
-def printVariantDetails(outputDirName, varDF):
-    '''
-    NOTE: Migrated to output writer object
-
-
-    Replacement function to print all information about each mutation,
-    combining all mutations (irrespective of in how many samples they appear)
-    into a single row
-    Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
-          indels may have the same chr, pos, but different ref/alt\
-
-    Output: variant_details.txt
-    '''
-
-    try:
-        ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-    # Group by (chr, pos, ref, alt, feature)
-    grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
-    # apply collapsing function to each pandas group
-    out = grouped.apply(collapseVariantDetails)
-    # print the new, collapsed dataframe to a file
-    out.sort(['chr','pos','feature']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
-    print("\t{0}: {1} rows".format(ofVariantDetails.name, len(out)))
-    return True
-
-def printLongVariantDetails(outputDirName, varDF):
-    '''
-    NOTE: Migrated to output writer object
-
-
-    Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
-    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
-    
-    Output: long_variant_details.txt
-    '''
-
-    try:
-        ofLongVariantDetails = open(outputDirName + "/long_variant_details.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-    varDF.sort(['chr','pos','feature']).to_csv(ofLongVariantDetails, sep='\t', na_rep='?', index=False)
-    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
-    return True
-
-    ofLongVariantDetails.close()
-    print("\t{0}: {1} rows".format(ofLongVariantDetails.name, nrow))
-    return True
-
-def printVariantDetailsXLS(outputDirName, varDF):
-    '''
-    NOTE: Migrated to output writer object
-
-    
-    Replacement function to print all information about each mutation,
-    combining all mutations (irrespective of in how many samples they appear)
-    into a single row
-    Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
-          indels may have the same chr, pos, but different ref/alt
-    
-    Output: variant_details.xls
-    '''
-
-    try:
-        ofVariantDetails = ExcelWriter(str(outputDirName) + '/variant_details.xls')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-    # Group by (chr, pos, ref, alt, feature)
-    grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
-    # apply collapsing function to each pandas group
-    out = grouped.apply(collapseVariantDetails)
-    # print the new, collapsed dataframe to a file
-    out.sort(['chr','pos','feature']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
-    ofVariantDetails.save()
-    print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
-    return True
-
-def printLongVariantDetailsXLS(outputDirName, varDF):
-    '''
-    NOTE: Migrated to output writer object
-
-    
-    Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
-    Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
-    
-    Output: long_variant_details.xls
-    '''
-
-    ofLongVariantDetails = ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
-    varDF.sort(['chr','pos','feature']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
-    ofLongVariantDetails.save()
-    print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
-    return True
-
-def printVariantBed(outputDirName, knownFeatures):
-    '''
-    ### NEEDS DF UPDATE ###
-    Print bed file of the variant locations
-    '''
-    try:
-        ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-    # =========================================================
-    # variant_locations.bed
-    #
-    masterList = list(knownFeatures.values())
-    sortedList = sorted(masterList, key=lambda k: k.numVariants(), reverse=True)
-    nrow = 0
-
-    for feature in sortedList:
-        if knownFeatures[feature.name].variants:
-            for var in knownFeatures[feature.name].uniqueVariants():
-                ofVariantBeds.write(var.pos.chrom + "\t")
-                ofVariantBeds.write(str(var.pos.pos - 1) + "\t")
-                ofVariantBeds.write(str(var.pos.pos) + "\t")
-                ofVariantBeds.write("\n")
-                nrow += 1
-    ofVariantBeds.close()
-    print("\t{0}: {1} rows".format(ofVariantBeds.name, nrow))
-    return True
 
 def getMetricsVCF(var, sourcefile):
     ''' 
@@ -901,41 +696,42 @@ def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
     print("\t{0}: {1} rows".format(ofBigVCF.name, nrow))
     return True
 
-def printOutput(config, outputDirName, knownFeatures, gas, varDF):
+def printRunInfo(config, outputDirName):
+    '''
+    Print useful information about the run, including the version, time, and configuration used
+
+    # cannot be migrated to the output writer object because of Info object and time.ctime
+    '''
+
+    try: 
+        ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
+    except:
+        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+    # =========================
+    # run_info.txt
+    #
+    ofRunInfo.write(Info.versionInfo + "\n")
+    ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
+    ofRunInfo.write(str(config))
+    
+    '''
+    TO DO: total runtime? or runtime breakdown per segment of the program?
+    ofRunInfo.write("Variants Pre-filter: \n")
+    ofRunInfo.write("        Post-filter: \n")
+    '''
+    ofRunInfo.close()
+    return True
+
+def printOutput(config, outputDirName, varDF):
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     printRunInfo(config, outputDirName)
-
+    pdb.set_trace()
     ow = output.Writer()
     for format in config.outputFormats:
         ow.write(varDF,format,outputDirName,config)
-
-    '''
-    Outdated if statements 
-    
-    if 'counts' in config.outputFormats:
-        printCounts(outputDirName, knownFeatures)
-    if 'txt' in config.outputFormats:
-        printVariantDetails(outputDirName, varDF)
-    if 'bed' in config.outputFormats:
-        print("bed format not yet supported")
-        #printVariantBed(outputDirName, knownFeatures)
-    if 'xlwt' in config.outputFormats and 'xlwt' in sys.modules:
-        printVariantDetailsXLS(outputDirName, varDF)
-    if 'default' in config.outputFormats:
-        printVariantDetails(outputDirName, varDF)
-        if 'xlwt' in sys.modules: printVariantDetailsXLS(outputDirName, varDF)
-        printCounts(outputDirName, knownFeatures)
-    if 'long' in config.outputFormats and 'xlwt' in sys.modules:
-        printLongVariantDetailsXLS(outputDirName, varDF)
-    if 'longtxt' in config.outputFormats:
-        printLongVariantDetails(outputDirName, varDF)
-    if 'vcf' in config.outputFormats:
-        print("long vcf format not yet supported")
-        #printBigVCF(outputDirName, knownFeatures, varDF, config.inputFiles)
-    '''
 
     totalTime = time.clock() - startTime
     print("\tTime to write: {0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
@@ -975,7 +771,7 @@ def main():
 
     varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions, total)
 
-    printOutput(config, str(config.outputDir), knownFeatures, gas, varDF)
+    printOutput(config, str(config.outputDir), varDF)
     
     ## ## ##
     # print record format (long format) all variants data frame
@@ -992,15 +788,6 @@ def main():
     ##varDF.replace('', np.nan, inplace=True)
     ##varDF.to_csv(outputDir + '/allvars.txt', sep="\t", na_rep='?', index=False)
     
-    # FUTURE: all output taken care of with below
-    # ow = output.writer()
-    # for format in config.outputFormats
-    #   ow.write(df, format, config.outputDir) #<-outputDir or whtever, double check
-
-    # >>>>>>>>> JAMES' OUTPUT FUNCTION  <<<<<<<<<<<
-    # ow = output.writer()
-    # ow.write(varDF, "long", outputDir)
-
     # pretty print newline before exit
     print()
 

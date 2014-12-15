@@ -7,6 +7,7 @@
 import os
 import pandas as pd
 from config import Config
+import numpy as np
 import pdb
 
 class Writer(object):
@@ -22,7 +23,9 @@ class Writer(object):
                                     "txt": self.VariantDetails,
                                     "longtxt": self.LongVariantDetails,
                                     "xls": self.VariantDetailsXLS,
-                                    "longxls": self.LongVariantDetailsXLS }
+                                    "longxls": self.LongVariantDetailsXLS,
+                                    "bed":self.VariantBed,
+                                    "featXsamp": self.FeatureXSample }
 
     def write(self, data, format, outputDirName, config):
         """Write data in format to outputDirName
@@ -36,22 +39,21 @@ class Writer(object):
         else:
             raise TypeError("data was not pandas.core.frame.DataFrame")
         
-        if (format not in self.supported_formats):
-            raise ValueError("Unsupported output format {}".format(format)) 
+        if (format not in self.supported_formats.keys()):
+            raise ValueError("Unsupported output format {0}\n\tSupported Formats: {1}".format(format, self.supported_formats.keys()))
         
         if not os.path.exists(outputDirName):
-            raise ValueError("The specified output directory ({}) does not exist.".format(outputDirName))
+            raise ValueError("The specified output directory ({0}) does not exist.".format(outputDirName))
         else:
             self.outputDirName = outputDirName
         self.config = config
-        try:
-            self.supported_formats[format]()
-        except:
-            pdb.set_trace()
-
+        self.supported_formats[format]()
+        
     def RunInfo(self):
         '''
-        Print useful information about the run, including the version, time, and configuration used
+        Print useful information about the run, including the version, time, and configuration used 
+
+        ## doesn't work with output writer object yet because of Info object and time.ctime
         '''
         outputDirName = self.outputDirName
         config = self.config
@@ -77,7 +79,6 @@ class Writer(object):
     def Counts(self):
         '''
         Print counts per feature
-        Replacement function
 
         Output: counts.txt
         '''
@@ -91,18 +92,55 @@ class Writer(object):
         grouped = varDF.groupby('feature')
 
         numHits = grouped['sample'].count()
-        numHits.name = 'numHits'
+        numHits.name = 'Hits'
+        numHits = pd.DataFrame(numHits)
 
-        uniqueHits = grouped['sample'].count().groupby(level=0).count()
-        uniqueHits.name = 'uniqueHits'
+        weightedHits = grouped['vf'].apply(np.sum)
+        weightedHits.name = 'WeightedHits'
+        weightedHits = pd.DataFrame(weightedHits)
+
+        avgWeight = weightedHits.div(numHits.Hits, axis='index')
+        avgWeight = avgWeight.rename(columns={'WeightedHits':'AverageWeight'}) # different kind of column re-name required for division result
+        avgWeight = pd.DataFrame(avgWeight)
+
+        uniqueHits = grouped['pos'].nunique()
+        uniqueHits.name = 'UniqueHits'
+        uniqueHits = pd.DataFrame(uniqueHits)
 
         numSamples = grouped['sample'].nunique()
-        numSamples.name = 'numSamples'
+        numSamples.name = 'NumSamples'
+        numSamples = pd.DataFrame(numSamples)
 
-        # TO DO: Construct DF from the 3 columns
-        # TO DO: Write the DF to ofCounts
-        
-        return True    
+        # merge the 5 1-column dataframes into a single, 5-column dataframe. (6 columns including the feature name column)
+        out = numHits.join(weightedHits).join(avgWeight).join(uniqueHits).join(numSamples)
+        # change capitalization for consistency 
+        out.index.names = ['FeatureName']
+
+        out.sort().to_csv(ofCounts, sep='\t', na_rep='?', index=True)
+        print("\t{0}: {1} rows".format(ofCounts.name, len(out)))        
+        return True 
+
+    def FeatureXSample(self):
+        '''
+        Print counts per feature per sample.
+        Sample names populate the table header and feature names populate the first column. The count per sample per feature are the table values.
+
+        Output: feature_by_sample.txt
+        '''
+        outputDirName = self.outputDirName
+        varDF = self.data
+        try:
+            ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/feature_by_sample.xls")
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+        groupedDF = pd.DataFrame(varDF.groupby(['feature','sample']).apply(len))
+        outDF = groupedDF.stack().unstack(1)
+        outDF.index = outDF.index.droplevel(1)
+        outDF.to_excel(ofFeatureXSample, 'Feature by Sample', na_rep=0, index=True)
+        ofFeatureXSample.save()
+        print("\t{0}: {1} rows".format(ofFeatureXSample.name, len(outDF)))        
+        return True 
 
     def VariantDetails(self):
         '''
@@ -168,13 +206,12 @@ class Writer(object):
         try:
             ofVariantDetails = pd.ExcelWriter(str(outputDirName) + '/variant_details.xls')
         except:
-            pdb.set_trace()
-            #abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
         # Group by (chr, pos, ref, alt, feature)
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
         # apply collapsing function to each pandas group
         out = grouped.apply(collapseVariantDetails)
-        # print the new, collapsed dataframe to a file
+        # print the new, collapsed dataframe to file a
         out.sort(['chr','pos','feature']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
         ofVariantDetails.save()
         print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
@@ -196,29 +233,38 @@ class Writer(object):
         print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
         return True
 
-##########
+    def VariantBed(self):
+        '''
+        Print bed file of the variant locations
+
+        Output: variant_locations.bed
+        '''
+        outputDirName = self.outputDirName
+        varDF = self.data
+        try:
+            ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+        grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
+        out = grouped.apply(collapseVariantBed)
+        out.sort(['chr','start']).to_csv(ofVariantBeds, sep='\t', na_rep='?', index=False, header=False)
+        ofVariantBeds.close()
+        print("\t{0}: {1} rows".format(ofVariantBeds.name, len(out)))
+        return True
 
     def Default(self):
-        print "hello world"
-        pdb.set_trace()
-        raise ValueError("Output format default not implemented ... sorry")
+        '''
+        Runs several, common output functions, including VariantDetails and Counts. 
+        RunInfo is executed from the main printOutput function, regardless of the output types the user has selected
+        
+        Output: variant_details.txt
+                counts.txt
+        '''
+        self.VariantDetails()
+        self.Counts()
 
-    def long():
-        """Print output format in long (record-based) format, where each row represents a single variant in a single case; this is functionally equivalent to catting and sorting all input files"""
-            ## ## ##
-            # print record format (long format) all variants data frame
-            # TO DO : break out into function to slicing and dicing
-            #if (varDF['chr'][0].lower().startswith(('chr', 'Chr'))):
-            #    varDF['chr_num'] = varDF['chr'].apply(lambda x:x[3:]).astype(int)   # strip off the 'chr', unstringify
-            #    varDF.sort(columns=['chr_num', 'pos'], inplace=True)
-            #   varDF.drop(['chr_num'], axis=1, inplace=True)
-            #else: 
-            
-            # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
-            # so we will sort by feature (gene etc.) then position
-        self.data.sort(columns=['feature','pos'], inplace=True)
-        self.data.replace('', np.nan, inplace=True)
-        self.data.to_csv(self.outputDir + '/allvars.txt', sep='\t', na_rep='?', index=False)
+
+##########
 
     def vcf():
         """Print output in multi-sample VCF 4.1 format"""
@@ -230,7 +276,7 @@ class Writer(object):
 
 def collapseVariantDetails(group):
     '''
-    Pandas operations to support the printVariantDetails family of functions. 
+    Pandas operations to support the VariantDetails family of functions. 
     Collapses variant rows that share the same contig, position, ref allele, alt allele, and feature.
     Input: a pandas groupby object
     Output: a pandas dataframe object
@@ -238,16 +284,37 @@ def collapseVariantDetails(group):
     outvals = []
     columns = list(group.keys().values)
     for column in columns:
-        outstring = ''
+        # outstring = '' # string based
+        outlist = []     # list based
         if column in ['vf', 'dp', 'sample', 'source']:  # the only columns that need to be concatenated 
                                                         # the others are uniquified and "always" yield 1 value
             for i in group[column].values:
-                outstring += str(i) + ", "
-            outvals.append( outstring[:-2] )            # trim the extra ', ' off the end of outstring 
+                #outstring += str(i) + ", "   # string based
+                outlist.append(str(i))
+            #outvals.append( outstring[:-2] )  # string based          # trim the extra ', ' off the end of outstring 
+            outvals.append(", ".join(outlist))
         else:
             outvals.append( group[column].unique() )
     outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
     return outDF
+
+def collapseVariantBed(group):
+    '''
+    Pandas operation to support the VariantBed function.
+    Collapses variant rows that share the same contig, position, ref allele, and alt allele
+    Input: a pandas groupby object
+    Output: a pandas dataframe object, ready to be written to bed format
+    '''
+    bed_fields = ['chr','start','end','name']
+    chrom = group['chr'].unique()
+    pos = group['pos'].unique()
+    start = pos - 1     # bed files are 0-based positions
+    end = pos
+    name = ";".join(set(group['feature'].values))   # mutations that fall in overlapping features will have a name column with multiple values delimited by semicolons
+    return pd.DataFrame( dict( zip(     \
+        ['chr','start','end','name'],   \
+        [chrom, start , end , name]     \
+        )), columns=bed_fields)
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
