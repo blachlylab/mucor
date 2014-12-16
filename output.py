@@ -17,15 +17,17 @@ class Writer(object):
         self.data = pd.DataFrame()
         self.config = Config()
         self.outputDirName = ''
-        self.supported_formats = {  "runinfo": self.RunInfo,
-                                    "default": self.Default,
+        self.supported_formats = {  "default": self.Default,
                                     "counts": self.Counts,
                                     "txt": self.VariantDetails,
                                     "longtxt": self.LongVariantDetails,
                                     "xls": self.VariantDetailsXLS,
                                     "longxls": self.LongVariantDetailsXLS,
                                     "bed":self.VariantBed,
-                                    "featXsamp": self.FeatureXSample }
+                                    "featXsamp": self.FeatureXSample,
+                                    "featmutXsamp": self.Feature_and_MutationXSample,
+                                    "all": self.All }
+                                    # "runinfo": self.RunInfo 
 
     def write(self, data, format, outputDirName, config):
         """Write data in format to outputDirName
@@ -139,7 +141,30 @@ class Writer(object):
         outDF.index = outDF.index.droplevel(1)
         outDF.to_excel(ofFeatureXSample, 'Feature by Sample', na_rep=0, index=True)
         ofFeatureXSample.save()
-        print("\t{0}: {1} rows".format(ofFeatureXSample.name, len(outDF)))        
+        print("\t{0}: {1} rows".format(str(outputDirName) + "/feature_by_sample.xls", len(outDF)))        
+        return True 
+
+    def Feature_and_MutationXSample(self):
+        '''
+        Print counts per mutation per sample.
+        Sample names populate the table header and feature names populate the first column. Chromosome, position, ref, and alt populate the next columns.
+        The table values are boolean: 1 for present mutation, 0 for missing mutation. 
+
+        Output: feature_and_mutation_by_sample.txt
+        '''
+        outputDirName = self.outputDirName
+        varDF = self.data
+        try:
+            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/feature_and_mutation_by_sample.xls")
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+        groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
+        outDF = groupedDF.stack().unstack(5)
+        outDF.index = outDF.index.droplevel(5)
+        outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
+        ofFeature_and_MutationXSample.save()
+        print("\t{0}: {1} rows".format(str(outputDirName) + "/feature_and_mutation_by_sample.xls", len(outDF)))        
         return True 
 
     def VariantDetails(self):
@@ -164,7 +189,7 @@ class Writer(object):
         # apply collapsing function to each pandas group
         out = grouped.apply(collapseVariantDetails)
         # print the new, collapsed dataframe to a file
-        out.sort(['chr','pos','feature']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
+        out.sort(['feature','pos']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
         print("\t{0}: {1} rows".format(ofVariantDetails.name, len(out)))
         return True
 
@@ -182,7 +207,7 @@ class Writer(object):
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
-        varDF.sort(['chr','pos','feature']).to_csv(ofLongVariantDetails, sep='\t', na_rep='?', index=False)
+        varDF.sort(['feature','pos']).to_csv(ofLongVariantDetails, sep='\t', na_rep='?', index=False)
         print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
         return True
 
@@ -212,7 +237,7 @@ class Writer(object):
         # apply collapsing function to each pandas group
         out = grouped.apply(collapseVariantDetails)
         # print the new, collapsed dataframe to file a
-        out.sort(['chr','pos','feature']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
+        out.sort(['feature','pos']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
         ofVariantDetails.save()
         print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
         return True
@@ -228,7 +253,7 @@ class Writer(object):
         varDF = self.data
 
         ofLongVariantDetails = pd.ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
-        varDF.sort(['chr','pos','feature']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
+        varDF.sort(['feature','pos']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
         ofLongVariantDetails.save()
         print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
         return True
@@ -263,16 +288,21 @@ class Writer(object):
         self.VariantDetails()
         self.Counts()
 
+    def All(self):
+        '''
+        Runs all available output functions, based on those in the self.supported_formats dictionary 
+        '''
+        formats = self.supported_formats.keys()
+        formats.remove('default') # the default output is redundant in this situation, since we are going to run all the functions anwyay.
+        formats.remove('all')     # remove 'all' or initiate an infinite loop
+        for format in formats:
+            self.supported_formats[format]()
 
-##########
 
-    def vcf():
-        """Print output in multi-sample VCF 4.1 format"""
-        raise ValueError("Output format vcf is not implemented ... sorry")
-
-    def gvf():
-        """Print output in multi-sample GVF format"""
-        raise ValueError("Output format gvf is not implemented ... perhaps oneday")
+############################################
+#     V     support functions      V       #
+# do not write output, but used by writers #
+############################################
 
 def collapseVariantDetails(group):
     '''

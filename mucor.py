@@ -610,6 +610,8 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
     # position should be integer, not float
     varDF.pos   = varDF.pos.astype(int)
     # blank features should be more descriptive. this replaces empty strings with 'NO_FEATURE'. 
+    #   this is important to later functions that put feature in a pandas index. na_rep pandas function only changes dataframe values, not the index.
+    #   see output.FeatureXSample() for an example of when 'feature' is used in a pandas index.
     varDF['feature'][varDF.feature == ''] = 'NO_FEATURE'
 
     return varDF, knownFeatures, gas 
@@ -728,7 +730,7 @@ def printOutput(config, outputDirName, varDF):
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     printRunInfo(config, outputDirName)
-    pdb.set_trace()
+
     ow = output.Writer()
     for format in config.outputFormats:
         ow.write(varDF,format,outputDirName,config)
