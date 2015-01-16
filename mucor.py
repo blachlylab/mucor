@@ -30,13 +30,6 @@ from pandas import ExcelWriter
 import HTSeq
 
 # optional modules
-'''
-excel is now printed directly using pandas - no need for xlwt module
-try:
-    import xlwt
-except ImportError:
-    print("Excel writer module xlwt not found; Microsoft Excel output disabled")
-'''
 try:
     import tabix
 except ImportError:
@@ -46,88 +39,11 @@ except ImportError:
 import mucorfilters as mf
 from variant import Variant
 from mucorfeature import MucorFeature
-from inputs import *
+import inputs
 import output
 from config import Config
 from databases import dbLookup 
-
-class Info:
-    '''Program info: logo, version, and usage'''
-    logo = """
- __    __     __  __     ______     ______     ______    
-/\ "-./  \   /\ \/\ \   /\  ___\   /\  __ \   /\  == \   
-\ \ \-./\ \  \ \ \_\ \  \ \ \____  \ \ \/\ \  \ \  __<   
- \ \_\ \ \_\  \ \_____\  \ \_____\  \ \_____\  \ \_\ \_\ 
-  \/_/  \/_/   \/_____/   \/_____/   \/_____/   \/_/ /_/ 
-                                  
-"""
-    version = "0.9"
-    versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
-    # usage needs to be updated, or eliminated if argparse can replace this function. 
-    usage = """
-Usage:
-{0} [-h] | -g featurefile.gff -f feature_type [-u] -o <outputDir> <mutect001.txt mutect002.txt ... mutectNNN.txt>
-
-Flags:
-    -h  Show this help
-
-    -g  GFF3/GTF file describing the features into which mutations will be binned
-
-    -f  String to describe the type of feature to bin for this run.
-        e.g. gene_id or transcript_id or chromosome_id
-
-    -u,
-    --union
-        Join all items with same ID for feature_type (specified by -f)
-        into a single, continuous bin. For example, if you want intronic
-        variants counted with a gene, use this option. 
-        ** TO DO **
-        WARNING, this will likely lead to spurious results due to things
-        like MIR4283-2 which exists twice on + and - strand of the same
-        chromosome over 1 megabase apart. This creates one huge spurious
-        bin.
-
-    -o  Specify output directory
-
-Output directory:
-    Output files will be placed in the specified directory.
-    If the directory already exists, an error will occur (won't overwrite)
-
-    Output consists of CSV spreadsheets (.txt):
-        1. Plain text report of # variants binned according to feature_type
-        2. Summary of pre-filter and post-filter variants
-        3. Detailed report of all variants by feature_type
-
-Input files:
-    <mutect001.txt mutect002.txt ... mutectNNN.txt>
-    Final arguments should be a list of mutations in muTect output format
-
-"""
-    description = """
-
-mucor: MUtation CORrelation
-
-mucor reads in variant files from a variety of sources (VCF, muTect .out)
-and counts the number of mutations falling into known features. These are
-grouped together and output to see which features (genes) and which spec-
--ific locations within those genes have the highest frequency of mutation
-within a group.
-"""
-    epilog = """
-
-Output directory:
-    Output files will be placed in the specified directory.
-    If the directory already exists, an error will occur (won't overwrite)
-
-    Output consists of CSV spreadsheets (.txt):
-        1. Plain text report of # variants binned according to feature_type
-        2. Summary of pre-filter and post-filter variants
-        3. Detailed report of all variants by feature_type
-
-Input files:
-    <mutect001.txt mutect002.txt ... mutectNNN.txt>
-    Final arguments should be a list of mutations in muTect output format
-"""
+from info import Info
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
@@ -185,16 +101,13 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
     return gas, knownFeatures, duplicateFeatures
 
 def parseJSON(json_config):
-    """
+    '''
     Import the JSON config file from mucor_config.py. 
     Reads the config file into a dictionary, then writes each dictionary entry into the respective Config class position.
-    """
+    '''
     config = Config()
-
-    global filename2samples
-    filename2samples = {}
-    # load the json file into a dictionary, JD
     JD = json.load(open(json_config,'r'))
+
     # write dictionary values into a more human-friendly config class
     config.featureType = JD['feature']
     config.outputDir = JD['outputDir']
@@ -211,6 +124,7 @@ def parseJSON(json_config):
     # comma separated list of acceptable VCF filter column values
     config.filters = JD['filters']
 
+    '''
     global database_switch
     # if any databases are defined, switch the database_switch ON (True)
     # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
@@ -218,20 +132,24 @@ def parseJSON(json_config):
         database_switch = bool(config.databases)
     else:
         database_switch = bool(False)
+
     
     global SnpEff_switch
     # works similar to database switch above.
     SnpEff_switch = False
-
+    '''
     config.inputFiles = []
     config.samples = []
     for i in JD['samples']:
         config.samples.append(i['id'])
         for j in i['files']:
             filename = str(j['path']).split('/')[-1]
-            filename2samples[filename] = i['id']
+            config.filename2samples[filename] = i['id']
+            config.source[filename] = j['source']
+            '''
             if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
                 SnpEff_switch = bool(True)
+            '''
             config.inputFiles.append(j['path'])
 
     return config 
@@ -248,10 +166,9 @@ def parseGffFile(gffFileName, featureType, fast):
     startTime = time.clock()
     print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
     
-    scripts = "/".join(os.path.realpath(__file__).split('/')[:-1])
     annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
     # pickled file is created for specific combinations of gff annotation and feature type. See below for more details. **
-    archiveFilePath = str("/") + str(scripts).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
+    archiveFilePath = str("/") + str(fast).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
     print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
     
@@ -270,7 +187,7 @@ def parseGffFile(gffFileName, featureType, fast):
     # The pickle file will load the genomic array of sets, known features, and duplicate features. 
     # ** These three items will change depending on the supplied gff annotation AND the feature selected. 
     #    Thus, each pickle file will be for a specific combination of gff and feature, hence the naming convention.
-    if fast:
+    if bool(fast):
         # user wants to use pickled annotations
         if os.path.exists( archiveFilePath ):
             # using the existing, pickled annotation
@@ -284,13 +201,15 @@ def parseGffFile(gffFileName, featureType, fast):
             # no pickled annotation exists for this combination of gff and feature; creating it in the same directory as this mucor.py file
             print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType))
             print("   Reading in annotation and saving archive for faster future runs") 
+            if not os.path.exists( str("/".join(archiveFilePath.split('/')[:-1])) ):
+                os.makedirs( str("/".join(archiveFilePath.split('/')[:-1])) )
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
             archiveOut = open(archiveFilePath, 'wb')
             pickle.dump(gas, archiveOut, -1) ### pickle feature only works with full annotation files
             pickle.dump(knownFeatures, archiveOut, -1)
             pickle.dump(duplicateFeatures, archiveOut, -1)
             archiveOut.close()
-    if not fast:
+    if not bool(fast):
     # ignore pickles function entirely. Won't check for it and won't attempt to create it
         gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
 
@@ -351,7 +270,7 @@ def skipThisIndel(var, knownFeatures, featureName):
         The refs and the alts are different, but both mutations represent the same T insertion
     '''
     if len(var.ref) != len(var.alt):
-        for kvar in knownFeatures[featureName].variants: # kvar --> known variant
+        for kvar in knownFeatures[featureName].variants: # "kvar" stands for "known variant"
             if kvar.pos.pos == var.pos.pos and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
                 return (kvar.ref, kvar.alt)
                 break
@@ -376,11 +295,12 @@ def groupCount(grp):
     grp['count'] = len(grp['sample'])
     return grp
 
-def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regions, total): 
+def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total): 
     '''
     Read in all input files
     Record mutations in the variant dataframe 
     '''
+
     startTime = time.clock()
 
     # All variants stored in long (record) format
@@ -388,8 +308,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
     #
     # However, it is MUCH faster to initially store them in a python Dict
     # Then convert to the pandas DF at the end
-    varD = defaultdict(list) # {'chr':[],'pos':[],'ref':[],'alt':[],'vf':[],'dp':[],'feature':[],'effect':[],'fc':[],'datab':[],'sample':[],'source':[]}
-    
+    varD = defaultdict(list) 
+    variantFiles = list(config.inputFiles)
+
     if regions: # has the user specified any particular regions or region files to focus on?
         regionDict = defaultdict(set)
         for item in regions:
@@ -425,61 +346,9 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             print("Empty file {}".format(fn))
             continue    # next fn in variantFiles
 
-        # declare all data types False, then reassign to True as they are encountered.
-        # only one should be true at a time for any given file (fn)
-        global MiSeq
-        MiSeq = False
-        global IonTorrent
-        IonTorrent = False
-        global Mutect
-        Mutect = False
-        global Mutector
-        Mutector = False
-        global SomaticIndelDetector
-        SomaticIndelDetector = False
-        global Samtools
-        Samtools = False
-        global VarScan 
-        VarScan = False
-        global HapCaller
-        HapCaller = False
-        global FreeBayes
-        FreeBayes = False
-        global MAF
-        MAF = False
-        global GVF
-        GVF = False
-
-        # check filename for MAF or GVF
-        if str(fn.split('.')[-1].strip()).lower() == 'maf':
-            MAF = True
-            while str(row[0]).startswith('#'):
-                row = varReader.next()
-        if str(fn.split('.')[-1].strip()).lower() == 'gvf':
-            GVF = True
-
-        # check VCF file headers for the variant calling software used
-        while str(row).split("'")[1][0:2] == '##': 
-            if str('Torrent Unified Variant Caller') in str(row): 
-                IonTorrent = True
-            elif str('MiSeq') in str(row):
-                MiSeq = True
-            elif str('SomaticIndelDetector') in str(row):
-                SomaticIndelDetector = True
-            elif str('MuTect') in str(row):
-                Mutect = True
-            elif str('muTector') in str(row):
-                Mutector = True
-            elif str('samtools') in str(row):
-                Samtools = True
-            elif str('source=VarScan') in str(row):
-                VarScan = True
-            elif str('ID=HaplotypeCaller') in str(row):
-                HapCaller = True
-            elif str('freeBayes') in str(row):
-                FreeBayes = True
+        while str(row).split("'")[1][0:2] == '##':
             row = varReader.next()
-        
+
         header = row
         if len(header) == 0: raise ValueError('Invalid header')
         fieldId = dict(zip(header, range(0, len(header))))
@@ -489,6 +358,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
                 continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
 
+            # attempt to extract 'effect' and 'functional consequence' from the VCF line
             effect = ""
             fc = ""
             muts = []
@@ -499,6 +369,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                         for j in eff.split(','):
                             muts.append(str(j.split('|')[3]))
                             loca.append(str(j.split('(')[0]).replace('EFF=',''))
+                # reformat the lists to exclude blanks and be semicolon delimited
                 for mut in set(muts):
                     if str(mut) != "":
                         effect += str(mut) + ";"
@@ -506,43 +377,15 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
                     if str(loc) != "":
                         fc += str(loc) + ";"
             except KeyError:
+                # this VCF may not be snpEff annotated
                 pass
 
-            # prime the InputParser object for this row
-            InputParser.row = row
-            InputParser.fieldId = fieldId
-            InputParser.header = header
-            InputParser.fn = fn
-            InputParser.eff = effect
-            InputParser.fc = fc 
-
-            # parse the row of data, depending on the type of data
-            if MiSeq:
-                var = parse_MiSeq(InputParser)                
-            elif IonTorrent:
-                var = parse_IonTorrent(InputParser)                
-            elif Mutect:
-                var = parse_MuTectVCF(InputParser)                
-            elif SomaticIndelDetector:
-                var = parse_SomaticIndelDetector(InputParser)
-            elif Mutector:
-                var = parse_MuTectOUT(InputParser)
-            elif Samtools:
-                var = parse_SamTools(InputParser)
-            elif VarScan:
-                var = parse_VarScan(InputParser)
-            elif HapCaller:
-                var = parse_HapCaller(InputParser)
-            elif FreeBayes:
-                var = parse_FreeBayes(InputParser)
-            elif MAF:
-                var = parse_MAF(InputParser)
-            else:
-                abortWithMessage("{0} isn't a known data type:\nMiSeq, IonTorrent, SomaticIndelDetector, Samtools, VarScan, Haplotype Caller, or Mutect".format(fn))
-            if regions and not inRegionDict(chrom, int(position), int(position), regionDict ):
+            parser = inputs.Parser()
+            source = config.source[fn.split('/')[-1]]
+            var = parser.parse(source, row, fieldId, header, fn, effect, fc)
+            if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
                 continue
 
-            ###########################################
             # find bin for variant location
             resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
             if resultSet:                   # which I'll use as a key on the knownFeatures dict
@@ -566,7 +409,7 @@ def parseVariantFiles(variantFiles, knownFeatures, gas, databases, filters, regi
             features = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
             effect = var.eff
             fc = var.fc
-            sample = filename2samples[str(fn.split('/')[-1])]
+            sample = config.filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
             dbEntries = dbLookup(var, databases)
             count = 0 # initialize this database column now to save for later
@@ -698,38 +541,11 @@ def printBigVCF(outputDirName, knownFeatures, varDF, inputFiles):
     print("\t{0}: {1} rows".format(ofBigVCF.name, nrow))
     return True
 
-def printRunInfo(config, outputDirName):
-    '''
-    Print useful information about the run, including the version, time, and configuration used
-
-    # cannot be migrated to the output writer object because of Info object and time.ctime
-    '''
-
-    try: 
-        ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-    # =========================
-    # run_info.txt
-    #
-    ofRunInfo.write(Info.versionInfo + "\n")
-    ofRunInfo.write("{0}\n\n".format(time.ctime() ) )
-    ofRunInfo.write(str(config))
-    
-    '''
-    TO DO: total runtime? or runtime breakdown per segment of the program?
-    ofRunInfo.write("Variants Pre-filter: \n")
-    ofRunInfo.write("        Post-filter: \n")
-    '''
-    ofRunInfo.close()
-    return True
-
 def printOutput(config, outputDirName, varDF):
     '''Output statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
-    printRunInfo(config, outputDirName)
 
     ow = output.Writer()
     for format in config.outputFormats:
@@ -769,9 +585,9 @@ def main():
     #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise having many vcf files and 1 sample ID]
     total = len(set(config.samples))
 
-    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), bool(config.fast))
+    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast)
 
-    varDF, knownFeatures, gas = parseVariantFiles(list(config.inputFiles), knownFeatures, gas, config.databases, config.filters, config.regions, total)
+    varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
 
     printOutput(config, str(config.outputDir), varDF)
     

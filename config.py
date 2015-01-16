@@ -18,6 +18,8 @@ class Config(object):
             self.inputFiles = []    # derived from samples
             self.databases = {}
             self.regions = []
+            self.filename2samples = {}
+            self.source = {}
 
     def __str__(self):
         string_rep =    "No. samples: {0}\n\n" + \

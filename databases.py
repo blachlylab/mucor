@@ -53,9 +53,9 @@ def dbLookup(var, dbs):
             pass
         else:
             # 'source' is a variable used to title the column in the output
-            # it defaults to the database VCF filename, but if a source= pragma
-            # is present in the VCF header, it will use that instead
-            if os.path.splitext(db)[1] == ".gz":
+            # it is defined by the user in the configuration script step when generating the JSON file
+
+            if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
                 try:
                     database = gzip.open(db)
                 except:
@@ -63,6 +63,8 @@ def dbLookup(var, dbs):
                     continue
             elif os.path.splitext(db)[1] == ".vcf":
                 abortWithMessage("Error: database file {0} must compressed with bgzip".format(db))
+            elif os.path.splitext(db)[1] == ".gz" and not os.path.exists(db + ".tbi"):
+                abortWithMessage("Compressed database is not tabix indexed")
             else: abortWithMessage("Error opening database files: {0}".format(db))
             
             try:

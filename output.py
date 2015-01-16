@@ -9,6 +9,8 @@ import pandas as pd
 from config import Config
 import numpy as np
 import pdb
+import time
+from info import Info
 
 class Writer(object):
     """Object that parses the mucor dataframe and can write output in several different formats"""
@@ -26,14 +28,16 @@ class Writer(object):
                                     "bed":self.VariantBed,
                                     "featXsamp": self.FeatureXSample,
                                     "featmutXsamp": self.Feature_and_MutationXSample,
-                                    "all": self.All }
-                                    # "runinfo": self.RunInfo 
+                                    "all": self.All,
+                                    "runinfo": self.RunInfo }
 
     def write(self, data, format, outputDirName, config):
-        """Write data in format to outputDirName
+        '''
+        Write data in format to outputDirName
         data: a pandas dataframe
         format: a string: one of [default, vcf, gvf, xls]   # consider merging in report functionality
-        outputDirName: a string"""
+        outputDirName: a string
+        '''
         
         # Parameter integrity/validity checks
         if (type(data) == pd.DataFrame):
@@ -49,13 +53,13 @@ class Writer(object):
         else:
             self.outputDirName = outputDirName
         self.config = config
+        self.VCF()
         self.supported_formats[format]()
         
     def RunInfo(self):
         '''
         Print useful information about the run, including the version, time, and configuration used 
 
-        ## doesn't work with output writer object yet because of Info object and time.ctime
         '''
         outputDirName = self.outputDirName
         config = self.config
@@ -277,6 +281,16 @@ class Writer(object):
         print("\t{0}: {1} rows".format(ofVariantBeds.name, len(out)))
         return True
 
+    def VCF(self):
+        outputDirName = self.outputDirName
+        varDF = self.data
+        try:
+            ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+        grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
+        out = grouped.apply(collapseVCF)
+
     def Default(self):
         '''
         Runs several, common output functions, including VariantDetails and Counts. 
@@ -285,6 +299,7 @@ class Writer(object):
         Output: variant_details.txt
                 counts.txt
         '''
+        self.RunInfo()
         self.VariantDetails()
         self.Counts()
 
@@ -345,6 +360,12 @@ def collapseVariantBed(group):
         ['chr','start','end','name'],   \
         [chrom, start , end , name]     \
         )), columns=bed_fields)
+
+def collapseVCF(group):
+    '''
+    Pandas operation to support the VCF function.
+    '''
+    pdb.set_trace()
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
