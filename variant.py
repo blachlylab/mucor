@@ -7,8 +7,8 @@ class Variant:
 		self.pos = pos			# HTSeq.GenomicPosition
 		self.ref = ref
 		self.alt = alt
-		self.frac = frac        ######## Karl Added ##############
-		self.dp = dp            ######## Karl Added ##############
-		self.eff = eff          ######## Karl Added ##############
+		self.frac = frac     
+		self.dp = dp            
+		self.eff = eff          
 		self.fc = fc
-		#self.annot = annot      ######## Karl Added ##############
+

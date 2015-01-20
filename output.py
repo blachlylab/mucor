@@ -28,6 +28,7 @@ class Writer(object):
                                     "bed":self.VariantBed,
                                     "featXsamp": self.FeatureXSample,
                                     "featmutXsamp": self.Feature_and_MutationXSample,
+                                    "vcf": self.VCF,
                                     "all": self.All,
                                     "runinfo": self.RunInfo }
 
@@ -53,7 +54,6 @@ class Writer(object):
         else:
             self.outputDirName = outputDirName
         self.config = config
-        self.VCF()
         self.supported_formats[format]()
         
     def RunInfo(self):
@@ -173,7 +173,7 @@ class Writer(object):
 
     def VariantDetails(self):
         '''
-        Replacement function to print all information about each mutation,
+        Print all information about each mutation,
         combining all mutations (irrespective of in how many samples they appear)
         into a single row
         Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
@@ -282,6 +282,11 @@ class Writer(object):
         return True
 
     def VCF(self):
+        '''
+        Print vcf file of the variant locations, feature, depth, and variant frequency.
+
+        Output: variant_locations.vcf
+        '''
         outputDirName = self.outputDirName
         varDF = self.data
         try:

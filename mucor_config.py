@@ -193,13 +193,13 @@ def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
-    parser.add_argument("-db", "--databases", default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared more than once. Ex: -db name1:/full/user/path/name1.vcf.gz ")
-    parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names")
-    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find output")
-    parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin [gene]")
-    parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow")
+    parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcript_name, transcript_id, etc. ")
+    parser.add_argument("-db", "--databases", default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times. Ex: -db name1:/full/user/path/name1.vcf.gz ")
+    parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names. One sample per line.")
+    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find output. Default: current working directory")
+    parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow. Default: PASS") # the defualt value is applied later on in the getJSONDict function, not here.
     parser.add_argument("-a", "--archive_directory", default=False, help="Specify directory in which to read/write archived annotations. Undefined will circumvent annotation archive features.")
-    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions OR bed files")
+    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions OR bed files to focus on. Ex: chr1:10230-10240,chr2,my_regions.bed")
     # does union even work? should we delete the option entirely?
     parser.add_argument("-u", "--union", action="store_true", help="""
         Join all items with same ID for feature_type (specified by -f)
@@ -211,9 +211,9 @@ def main():
         chromosome over 1 megabase apart. This creates one huge spurious
         bin.
         """)
-    parser.add_argument("-jco", "--json_config_output", required=True, help="Name of JSON configuration file")   
-    parser.add_argument("-outd", "--output_directory", required=True, help="Name of Mucor output directory")
-    parser.add_argument("-outt", "--output_type", default="default", help="Comma separated list of disired output types: xls, bed, long ")
+    parser.add_argument("-jco", "--json_config_output", required=True, help="Name of JSON configuration output file")   
+    parser.add_argument("-outd", "--output_directory", required=True, help="Name of directory in which to write Mucor output")
+    parser.add_argument("-outt", "--output_type", default="default", help="Comma separated list of desired output types. Options include: counts, txt, longtxt, xls, longxls, bed, featXsamp, featmutXsamp, all. Default: counts,txt")
     args = parser.parse_args()
 
     # Verify that required files and directoreis exist and/or are writable
