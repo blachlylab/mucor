@@ -285,11 +285,16 @@ class Writer(object):
         outputDirName = self.outputDirName
         varDF = self.data
         try:
-            ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
+            ofVariantVCF = open(outputDirName + "/variant_locations.vcf", 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
         out = grouped.apply(collapseVCF)
+        out.to_csv(ofVariantVCF, sep='\t', na_rep='?', index=False, header=True, sparsify=False)
+        ofVariantVCF.close()
+        print("\t{0}: {1} rows".format(ofVariantVCF.name, len(out)))
+        return True
+
 
     def Default(self):
         '''
@@ -364,8 +369,27 @@ def collapseVariantBed(group):
 def collapseVCF(group):
     '''
     Pandas operation to support the VCF function.
+    Collapses variant rows that share the same contig, position, ref allele, and alt allele
+    Input: a pandas groupby object
+    Output: a pandas dataframe object, ready to be written to vcf format 
     '''
-    pdb.set_trace()
+    chrom = group['chr'].unique()
+    pos = group['pos'].unique()
+    ref = group['ref'].unique()
+    alt = group['alt'].unique()
+    none = np.array(['.'], dtype=object) # numpy array object for blank columns, such as ID, QUAL, and FILTER
+    info = '' # output will have sample-specific information in the 'info' column
+    vcf_fields = ['#CHROM','POS','ID', 'REF','ALT', 'QUAL', 'FILTER','INFO']  # standard VCF header
+    samples = group['sample'].unique()
+    for sample in samples:
+        info += str(sample) + ':'
+        for feat in group[group['sample'] == sample]['feature'].values:
+            line = group[ (group.sample == sample) & (group.feature == feat) ]
+            vf = str(line['vf'].values[0])
+            dp = str(line['dp'].values[0])
+            info += str(feat) + " vf=" + vf + " dp=" + dp + "; "
+    return pd.DataFrame(dict(zip(vcf_fields,[chrom, pos, none, ref, alt, none, none, info])), columns=vcf_fields)
+
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
