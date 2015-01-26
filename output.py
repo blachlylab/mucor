@@ -314,6 +314,10 @@ class Writer(object):
             ofVariantVCF = open(outputDirName + "/variant_locations.vcf", 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+        
+        #VCF header to stream
+        ofVariantVCF.write("##fileformat=VCFv4.1\n")
+        
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
         out = grouped.apply(collapseVCF)
         out.to_csv(ofVariantVCF, sep='\t', na_rep='?', index=False, header=True, sparsify=False)
