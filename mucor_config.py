@@ -7,6 +7,7 @@
 # James S Blachly
 
 import os
+import sys
 import argparse
 from collections import defaultdict
 import csv
@@ -22,7 +23,7 @@ def abortWithMessage(message, help = False):
     exit(2)
 
 def throwWarning(message, help = False):
-    print("*** WARNING: " + message + " ***")
+    print("\n*** WARNING: " + message + " ***")
 
 def DetectDataType(fn):
     '''
@@ -32,7 +33,11 @@ def DetectDataType(fn):
 
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
-    row = varReader.next()
+    try:
+        row = varReader.next()
+    except StopIteration:
+        throwWarning("Empty file: {0}".format(fn))
+        return "Unknown"
     while str(row).split("'")[1][0:2] == '##':
         if str('Torrent Unified Variant Caller') in str(row): 
             return "IonTorrent"
@@ -83,6 +88,58 @@ def DetectSnpEffStatus(fn):
             break
         row = varReader.next()
     return False
+
+def blankJSONDict():
+    '''
+    Create a blank, valid JSON dictionary to show an example config file. JSON dict keys are identical to the Config class in config.py. 
+    '''
+    json_dict = defaultdict()
+    json_dict['outputDir'] = str("outputDir_path")
+    json_dict['gff'] = str("gff_path")
+    json_dict['union'] = bool(True)
+    json_dict['fast'] = str("fastDir_path") # This will be boolean "False" by default, or a str() if declared
+    json_dict['feature'] = str("feature")
+    json_dict['samples'] = list(dict())
+
+    # VCF filters
+    json_dict['filters'] = ["PASS", "lowDP"] 
+
+    # Genomic regions
+    json_dict['regions'] = []
+
+    # Variant databases 
+    json_dict['databases'] = {"dbName":"db_Location"}
+
+    # Output formats
+    json_dict['outputFormats'] = []
+
+    # Samples and associated variant files
+    for sid in ['sample1','sample2']:
+        # walk over the input project directory (or CWD if none defined) to find all files with sample ID in the name
+        tmpSampleDict = defaultdict()
+        tmpSampleDict['id'] = str(sid)
+        tmpSampleDict['files'] = list()
+        for root, dirs, files in ["project", "dir1", "sample1-a.vcf"], ["project", "dir2", "sample1-b.vcf"], ["project", "dir3", "sample2.vcf"]:
+            if str(sid) in str(files): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
+                full_path = os.path.join(root, dirs, files)
+                source = "VarScan"
+                if str(files).split('.')[-1] == str("vcf"):
+                    tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':False, 'source':source} )
+                elif str(files).split('.')[-1] == str("out"):
+                    tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+            # Not sure if these still work 
+                elif str(files).split('.')[-1].lower() == str("maf"):
+                    tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
+                elif str(files).split('.')[-1].lower() == str("gvf"):
+                    tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
+                else:
+                    # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
+                    # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
+                    pass
+                            
+        json_dict['samples'].append(tmpSampleDict)
+    return json_dict
+
 
 def getJSONDict(args, proj_dir):
     '''
@@ -159,8 +216,9 @@ def getJSONDict(args, proj_dir):
                         full_path = os.path.join(root, i)
                         source = DetectDataType(full_path)
                         if source == "Unknown":
-                            print("Cannot parse file from an unsupported variant caller. \nPlease use supported variant software, or compose an input module for inputs.py")
-                        if str(i).split('.')[-1] == str("vcf"):
+                            throwWarning(full_path)
+                            print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
+                        elif str(i).split('.')[-1] == str("vcf"):
                             tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
                         elif str(i).split('.')[-1] == str("out"):
                             tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
@@ -188,10 +246,21 @@ def inconsistentFilesPerSample(json_dict):
     if len(numset) > 1:
         return True
 
+class exampleJSON(argparse.Action):
+    def __init__(self,option_strings, dest=None, nargs=0, default=None, required=False, type=None, metavar=None, help="Print a valid, example JSON config file and exit."):
+        super(exampleJSON, self).__init__(option_strings=option_strings, dest=dest, nargs=nargs, default=default, required=required, metavar=metavar, type=type, help=help)
+    def __call__(self, parser, namespace, values, option_string=None):
+        print("Printing example_config.json ... ")
+        output_file = codecs.open('example_config.json', "w", encoding="utf-8")
+        json.dump(blankJSONDict(), output_file, sort_keys=True, indent=4, ensure_ascii=True)
+        print("Finished. Exiting ... ")
+        sys.exit(0)
+
 def main():
     print
     # Parse arguments
     parser = argparse.ArgumentParser()
+    parser.add_argument("-ex", "--example", action=exampleJSON)
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcript_name, transcript_id, etc. ")
     parser.add_argument("-db", "--databases", default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times. Ex: -db name1:/full/user/path/name1.vcf.gz ")

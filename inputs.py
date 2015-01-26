@@ -18,8 +18,8 @@ class Parser(object):
             # Respective parse functions. 
             # Keys are identical to the allowed formats in mucor_config.py
             # Values are the parse functions defined below
-            self.supported_formats = {  "IonTorrent":self.parse_MiSeq,
-                                        "MiSeq":self.parse_IonTorrent,
+            self.supported_formats = {  "MiSeq":self.parse_MiSeq,
+                                        "IonTorrent":self.parse_IonTorrent,
                                         "SomaticIndelDetector":self.parse_SomaticIndelDetector,
                                         "Mutect":self.parse_MuTectVCF,
                                         "muTector":self.parse_MuTectOUT,
@@ -86,7 +86,6 @@ class Parser(object):
             k += 1
 
         position = int(row[fieldId['POS']])
-        #return vf, dp, position, eff, fc
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -124,7 +123,6 @@ class Parser(object):
                 # this is a deletion in Ion Torrent data
                 position = int(row[fieldId['POS']])
                 break
-        #return vf, dp, position
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -140,11 +138,10 @@ class Parser(object):
         alt   = row[4]
         effect = self.eff
         fc = self.fc
-        vf = row[fieldId['tumor_f']]
+        vf = float(row[fieldId['tumor_f']])
         dp = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
         position = int(row[fieldId['position']])
 
-        #return vf, dp, position 
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
         
@@ -166,13 +163,12 @@ class Parser(object):
                 tmpsampID = i
         for i in row[fieldId['FORMAT']].split(':'):
             if i == "FA":
-                vf = row[fieldId[tmpsampID]].split(':')[j]
+                vf = float(row[fieldId[tmpsampID]].split(':')[j])
             elif i == "DP":
                 dp = row[fieldId[tmpsampID]].split(':')[j]
             j+=1
         position = int(row[fieldId['POS']])
 
-        #return vf, dp, position 
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -202,7 +198,6 @@ class Parser(object):
                 vf = float( float(ALT_count)/float(dp) )
             j+=1
         position = int(row[fieldId['POS']])
-        #return vf, dp, position
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -222,11 +217,10 @@ class Parser(object):
         for i in row[fieldId['INFO']].split(';'):
             if i.startswith("DP4="):
                 j = i.split('=')[1].split(',')
-                ref = int(int(j[0]) + int(j[1]))
-                alt = int(int(j[2]) + int(j[3]))
-                dp = int(int(ref) + int(alt))
-                vf = float( float(alt)/float(dp) )
-                #return vf, dp, position
+                ro = int(int(j[0]) + int(j[1]))
+                ao = int(int(j[2]) + int(j[3]))
+                dp = int(int(ro) + int(ao))
+                vf = float( float(ao)/float(dp) )
                 var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
                 return var
 
@@ -250,7 +244,6 @@ class Parser(object):
             if str(i) == "FREQ":
                 vf = float(float(str(row[fieldId[header[-1]]].split(':')[j]).strip('%'))/float(100))
             j += 1
-        #return vf, dp, position
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -280,7 +273,6 @@ class Parser(object):
                 else:
                     abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
             j += 1
-        #return vf, dp, position
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -307,7 +299,6 @@ class Parser(object):
                 ao = int(  sum([ int(x) for x in str(row[fieldId[header[-1]]].split(':')[j]).split(',')]) )
             j += 1
         vf = float( float(ao)/float(ao + ro) )
-        #return vf, dp, position
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -357,7 +348,6 @@ class Parser(object):
         if ref == "-":
             ref = ""
         if alt == "-":
-            alt = ""
-        #return vf, dp, position, chrom, ref, alt    
+            alt = ""   
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var

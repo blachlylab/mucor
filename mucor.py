@@ -106,7 +106,10 @@ def parseJSON(json_config):
     Reads the config file into a dictionary, then writes each dictionary entry into the respective Config class position.
     '''
     config = Config()
-    JD = json.load(open(json_config,'r'))
+    try:
+        JD = json.load(open(json_config,'r'))
+    except:
+        abortWithMessage("Could not load the given JSON config file. See the example config for proper formatting.")
 
     # write dictionary values into a more human-friendly config class
     config.featureType = JD['feature']
