@@ -20,7 +20,6 @@ from collections import defaultdict
 import gzip
 import cPickle as pickle
 import pdb                             # Needed for pdb.set_trace()
-import xml.etree.ElementTree as ET
 import json
 
 # nonstandard modules
