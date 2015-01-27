@@ -19,12 +19,13 @@ class Writer(object):
         self.data = pd.DataFrame()
         self.config = Config()
         self.outputDirName = ''
+        self.attempted_formats = []     # used to prevent output modules from being executed multiple times
         self.supported_formats = {  "default": self.Default,
                                     "counts": self.Counts,
                                     "txt": self.VariantDetails,
                                     "longtxt": self.LongVariantDetails,
-                                    "xls": self.VariantDetailsXLS,
-                                    "longxls": self.LongVariantDetailsXLS,
+                                    "xls": self.VariantDetails,
+                                    "longxls": self.LongVariantDetails,
                                     "bed":self.VariantBed,
                                     "featXsamp": self.FeatureXSample,
                                     "featmutXsamp": self.Feature_and_MutationXSample,
@@ -53,6 +54,7 @@ class Writer(object):
             raise ValueError("The specified output directory ({0}) does not exist.".format(outputDirName))
         else:
             self.outputDirName = outputDirName
+        self.format = format
         self.config = config
         self.supported_formats[format]()
         
@@ -61,6 +63,7 @@ class Writer(object):
         Print useful information about the run, including the version, time, and configuration used 
 
         '''
+        self.attempted_formats.append('runinfo')
         outputDirName = self.outputDirName
         config = self.config
         try: 
@@ -88,6 +91,7 @@ class Writer(object):
 
         Output: counts.txt
         '''
+        self.attempted_formats.append('counts')
         outputDirName = self.outputDirName
         varDF = self.data
         try:
@@ -133,6 +137,7 @@ class Writer(object):
 
         Output: feature_by_sample.txt
         '''
+        self.attempted_formats.append('featXsamp')
         outputDirName = self.outputDirName
         varDF = self.data
         try:
@@ -160,6 +165,7 @@ class Writer(object):
 
         Output: feature_and_mutation_by_sample.txt
         '''
+        self.attempted_formats.append('featmutXsamp')
         outputDirName = self.outputDirName
         varDF = self.data
         try:
@@ -185,24 +191,52 @@ class Writer(object):
         combining all mutations (irrespective of in how many samples they appear)
         into a single row
         Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
-              indels may have the same chr, pos, but different ref/alt\
+              indels may have the same chr, pos, but different ref/alt
 
-        Output: variant_details.txt
+        Output: variant_details.txt, variant_details.xls
+        Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
         '''
+
         outputDirName = self.outputDirName
         varDF = self.data
+        if 'txt' in self.config.outputFormats and 'txt' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/variant_details.txt"):
+            txt = bool(True)
+            self.attempted_formats.append('txt')
+        else:
+            txt = bool(False) # User has not opted for this output [parenthetical 'if's] or this output has already been run [last 'if']
+        if 'xls' in self.config.outputFormats and 'xls' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/variant_details.xls"):
+            xls = bool(True)
+            self.attempted_formats.append('xls')
+        else:
+            xls = bool(False) # User has not opted for this output [parenthetical 'if's] or this output has already been run [last 'if']
 
         try:
-            ofVariantDetails = open(outputDirName + "/variant_details.txt", 'w+')
+            if txt:
+                ofVariantDetailsTXT = open(outputDirName + "/variant_details.txt", 'w+')
+            if xls:
+                ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/variant_details.xls')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
         # Group by (chr, pos, ref, alt, feature)
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
         # apply collapsing function to each pandas group
         out = grouped.apply(collapseVariantDetails)
-        # print the new, collapsed dataframe to a file
-        out.sort(['feature','pos']).to_csv(ofVariantDetails, sep='\t', na_rep='?', index=False)
-        print("\t{0}: {1} rows".format(ofVariantDetails.name, len(out)))
+
+        if txt:
+            # print the new, collapsed dataframe to a file
+            out.sort(['feature','pos']).to_csv(ofVariantDetailsTXT, sep='\t', na_rep='?', index=False)
+            print("\t{0}: {1} rows".format(ofVariantDetailsTXT.name, len(out)))
+        if xls:
+            # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
+            if len(out) >= 65536:
+                throwWarning("xls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(out)))
+                return True
+            # print the new, collapsed dataframe to file a
+            out.sort(['feature','pos']).to_excel(ofVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
+            ofVariantDetailsXLS.save()
+            print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
+
         return True
 
     def LongVariantDetails(self):
@@ -210,77 +244,42 @@ class Writer(object):
         Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
         Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
         
-        Output: long_variant_details.txt
-        '''
-        outputDirName = self.outputDirName
-        varDF = self.data
-        try:
-            ofLongVariantDetails = open(outputDirName + "/long_variant_details.txt", 'w+')
-        except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
-        varDF.sort(['feature','pos']).to_csv(ofLongVariantDetails, sep='\t', na_rep='?', index=False)
-        print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
-        return True
-
-        ofLongVariantDetails.close()
-        print("\t{0}: {1} rows".format(ofLongVariantDetails.name, nrow))
-        return True
-
-    def VariantDetailsXLS(self):
-        '''
-        Function to print all information about each mutation,
-        combining all mutations (irrespective of in how many samples they appear)
-        into a single row
-        Note: chrom, position, ref, alt, and feature are all required to uniquely identify a mutation 
-              indels may have the same chr, pos, but different ref/alt
-        
-        Output: variant_details.xls
+        Output: long_variant_details.txt, long_variant_details.xls
         Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
         '''
         outputDirName = self.outputDirName
         varDF = self.data
 
+        if 'longtxt' in self.config.outputFormats and 'longtxt' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/long_variant_details.txt"):
+            longtxt = bool(True)
+            self.attempted_formats.append('longtxt')
+        else:
+            longtxt = bool(False) # User has not opted for this output [parenthetical 'if's] or this output has already been run [last 'if']
+        if 'longxls' in self.config.outputFormats and 'longxls' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/long_variant_details.xls"):
+            longxls = bool(True)
+            self.attempted_formats.append('longxls')
+        else:
+            longxls = bool(False) # User has not opted for this output [parenthetical 'if's] or this output has already been run [last 'if']
+
         try:
-            ofVariantDetails = pd.ExcelWriter(str(outputDirName) + '/variant_details.xls')
+            if longtxt:
+                ofLongVariantDetailsTXT = open(outputDirName + "/long_variant_details.txt", 'w+')
+                varDF.sort(['feature','pos']).to_csv(ofLongVariantDetailsTXT, sep='\t', na_rep='?', index=False)
+                ofLongVariantDetailsTXT.close()
+                print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
+                    
+            if longxls:
+                # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
+                if len(varDF) >= 65536:
+                    throwWarning("longxls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(varDF)))
+                    return True
+                ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
+                varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
+                ofLongVariantDetailsXLS.save()
+                print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-        # Group by (chr, pos, ref, alt, feature)
-        grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
-        # apply collapsing function to each pandas group
-        out = grouped.apply(collapseVariantDetails)
-        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-        if len(out) >= 65536:
-            throwWarning("xls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(out)))
-            return True
-        # print the new, collapsed dataframe to file a
-        out.sort(['feature','pos']).to_excel(ofVariantDetails, 'Variant Details', na_rep='?', index=False)
-        ofVariantDetails.save()
-        print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
-        return True
 
-    def LongVariantDetailsXLS(self):
-        '''
-        Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
-        Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
-        
-        Output: long_variant_details.xls
-        Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
-        '''
-        outputDirName = self.outputDirName
-        varDF = self.data
-
-        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-        if len(varDF) >= 65536:
-            throwWarning("longxls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(varDF)))
-            return True
-        try:
-            ofLongVariantDetails = pd.ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
-        except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-        varDF.sort(['feature','pos']).to_excel(ofLongVariantDetails, 'Long Variant Details', na_rep='?', index=False)
-        ofLongVariantDetails.save()
-        print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
         return True
 
     def VariantBed(self):
@@ -289,6 +288,7 @@ class Writer(object):
 
         Output: variant_locations.bed
         '''
+        self.attempted_formats.append('bed')
         outputDirName = self.outputDirName
         varDF = self.data
         try:
@@ -308,6 +308,7 @@ class Writer(object):
 
         Output: variant_locations.vcf
         '''
+        self.attempted_formats.append('vcf')
         outputDirName = self.outputDirName
         varDF = self.data
         try:
@@ -334,9 +335,9 @@ class Writer(object):
         Output: variant_details.txt
                 counts.txt
         '''
-        self.RunInfo()
-        self.VariantDetails()
-        self.Counts()
+        for format in ['runinfo', 'txt', 'counts']:
+            self.supported_formats[format]()
+        return True        
 
     def All(self):
         '''
@@ -345,8 +346,10 @@ class Writer(object):
         formats = self.supported_formats.keys()
         formats.remove('default') # the default output is redundant in this situation, since we are going to run all the functions anwyay.
         formats.remove('all')     # remove 'all' or initiate an infinite loop
+        self.config.outputFormats = formats
         for format in formats:
             self.supported_formats[format]()
+        return True
 
 
 ############################################
@@ -375,10 +378,16 @@ def collapseVariantDetails(group):
             #outvals.append( outstring[:-2] )  # string based          # trim the extra ', ' off the end of outstring 
             outvals.append(", ".join(outlist))
         else:
-            outvals.append( [group[column].unique()[0]] )   # functional consequence and effect should only be 1 value as well, but may not be if there is a mixture of annotated and unannotated vcf files. 
-                                                            # This sorts the effects and consequences, and only takes the first value as part of the output. This extracts the annotation and leaves the blank out of the output
-                                                            # each of the appended values must be an array in order to transform dictionary to pandas data frame in the next line
-    outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
+            if len(group[column].unique()) > 1:
+                outvals.append( filter(bool, group[column].unique()) )  # functional consequence and effect should only be 1 value as well, but may not be if there is a mixture of annotated and unannotated vcf files. 
+                                                                    # This sorts the effects and consequences, and only takes the first value as part of the output. This extracts the annotation and leaves the blank out of the output
+                                                                    # each of the appended values must be an array in order to transform dictionary to pandas data frame in the next line
+            else:
+                outvals.append( group[column].unique() )
+    try:                                                           
+        outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
+    except ValueError:
+        abortWithMessage("Could not collapse variant {0} {1} {2}/{3} into a single row. \n\t\tThis mutation may have inconsistent effect and/or functional consequence values in different VCF files.".format( str(group['chr'].unique()[0]), str(group['pos'].unique()[0]), str(group['ref'].unique()[0]), str(group['alt'].unique()[0]) ))
     return outDF
 
 def collapseVariantBed(group):

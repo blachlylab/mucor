@@ -117,7 +117,7 @@ def parseJSON(json_config):
     config.union = JD['union']
     config.fast = JD['fast']
     config.gff = JD['gff']
-    config.outputFormats = JD['outputFormats']
+    config.outputFormats = list(set(JD['outputFormats'])) # 'set' prevents repeated formats from being written multiple times
     if JD['databases']:
         config.databases = JD['databases']
     if str(JD['regions']):
@@ -467,7 +467,6 @@ def printOutput(config, outputDirName, varDF):
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
-
     ow = output.Writer()
     for format in config.outputFormats:
         ow.write(varDF,format,outputDirName,config)

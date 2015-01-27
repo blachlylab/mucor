@@ -25,6 +25,25 @@ def abortWithMessage(message, help = False):
 def throwWarning(message, help = False):
     print("\n*** WARNING: " + message + " ***")
 
+def DetectMalformedColumns(fn):
+    '''
+    Pass a variant calls file, including path, and it returns True if the column values are not consistent with VCF format
+    '''
+    varFile = open(fn, 'r')
+    varReader = csv.reader(varFile, delimiter='\t')
+    try:
+        row = varReader.next()
+    except StopIteration:
+        throwWarning("Empty file: {0}".format(fn))
+        return true
+    while str(row).split("'")[1][0:2] == '##':
+        row = varReader.next()
+
+    if row[:9] != ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']:
+        return True
+    return False
+
+
 def DetectDataType(fn):
     '''
     Pass a variant calls file, including path, and it will return the name of the tool that created the file. 
@@ -219,6 +238,9 @@ def getJSONDict(args, proj_dir):
                             throwWarning(full_path)
                             print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
                         elif str(i).split('.')[-1] == str("vcf"):
+                            if DetectMalformedColumns(full_path):
+                                throwWarning(full_path)
+                                print("File has malformed VCF column names and may not behave as expected in final outputs.")
                             tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
                         elif str(i).split('.')[-1] == str("out"):
                             tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
@@ -230,8 +252,7 @@ def getJSONDict(args, proj_dir):
                         else:
                             # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
                             # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
-                            pass
-                            
+                            pass            
         json_dict['samples'].append(tmpSampleDict)
     return json_dict
 
@@ -247,6 +268,9 @@ def inconsistentFilesPerSample(json_dict):
         return True
 
 class exampleJSON(argparse.Action):
+    '''
+    This argparse action will run the example JSON config function and exit the program. It is executed when the user gives "-ex || --example" as an argument
+    '''
     def __init__(self,option_strings, dest=None, nargs=0, default=None, required=False, type=None, metavar=None, help="Print a valid, example JSON config file and exit."):
         super(exampleJSON, self).__init__(option_strings=option_strings, dest=dest, nargs=nargs, default=default, required=required, metavar=metavar, type=type, help=help)
     def __call__(self, parser, namespace, values, option_string=None):
@@ -265,10 +289,10 @@ def main():
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcript_name, transcript_id, etc. ")
     parser.add_argument("-db", "--databases", default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times. Ex: -db name1:/full/user/path/name1.vcf.gz ")
     parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names. One sample per line.")
-    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find output. Default: current working directory")
+    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find input variant call files. Default: current working directory")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow. Default: PASS") # the defualt value is applied later on in the getJSONDict function, not here.
-    parser.add_argument("-a", "--archive_directory", default=False, help="Specify directory in which to read/write archived annotations. Undefined will circumvent annotation archive features.")
-    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions OR bed files to focus on. Ex: chr1:10230-10240,chr2,my_regions.bed")
+    parser.add_argument("-a", "--archive_directory", default=False, help="Specify directory in which to read/write archived annotations. Undeclared will prevent using the annotation archive features.")
+    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
     # does union even work? should we delete the option entirely?
     parser.add_argument("-u", "--union", action="store_true", help="""
         Join all items with same ID for feature_type (specified by -f)
