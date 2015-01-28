@@ -72,6 +72,7 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
         # WARNING
         # the following REQUIRES a coordinate-sorted GFF/GTF file
         # extra checks incurring slowdown penalty are req'd if GFF/GTF not sorted
+
         if feat.name in knownFeatures:
             # In case there is an error in the GFF and/or the featureType (-f) is not unique,
             # issue a warning
@@ -97,6 +98,7 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
             print(feat.name)
             print(feat.iv)
             raise
+    
     return gas, knownFeatures, duplicateFeatures
 
 def parseJSON(json_config):
