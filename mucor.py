@@ -52,7 +52,7 @@ def throwWarning(message, help = False):
     print("*** WARNING: " + message + " ***")
     return
 
-def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
+def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)
     for feature in itertools.islice(gffFile, 0, None):
         # Nonstandard contigs (eg chr17_ctg5_hap1, chr19_gl000209_random, chrUn_...)
@@ -66,8 +66,13 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
         elif "chrUn_" in feature.iv.chrom:
             continue
 
+        # skip full transcripts, full genes, and other items that are not exon ranges
+        if feature.type != 'exon':
+            continue
+
         # transform feature to instance of Class MucorFeature
         feat = MucorFeature(feature.attr[featureType], feature.type, feature.iv)
+        feat2 = feat
         
         # WARNING
         # the following REQUIRES a coordinate-sorted GFF/GTF file
@@ -83,11 +88,16 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures):
                 duplicateFeatures.add(feat.name)
                 feat.name = feat.name + '.' + feat.iv.chrom
             else:
-                # do not obliterate the start coordinate when adding SUCCESSIVE bits of a feature (e.g. exons)
-                # TO DO: Here is where the --nounion option would work
-                #feat.iv.start = knownFeatures[feat.name].iv.start
-                pass # no-union - this does overwrite previous coordinates in knownFeatures,
-                     # but should not matter as the actual coordinates are obtaind from 'gas'.
+                if union:
+                    # replace the start and end coordinates when adding SUCCESSIVE bits of a feature (e.g. exons)
+                    # results in one, large feature, starting with the earliest upsream location and ending with the latest downstream location
+                    if knownFeatures[feat.name].iv.start < feat.iv.start:
+                        feat.iv.start = knownFeatures[feat.name].iv.start
+                    if knownFeatures[feat.name].iv.end > feat.iv.end:
+                        feat.iv.end = knownFeatures[feat.name].iv.end
+                else:
+                    pass # no-union - this does overwrite previous coordinates in knownFeatures,
+                         # but should not matter as the actual coordinates are obtaind from 'gas'.
 
         # first, add to the knownFeatures, a dictionary of MucorFeatures, which contain the variants set
         knownFeatures[feat.name] = feat
@@ -158,7 +168,7 @@ def parseJSON(json_config):
 
     return config 
 
-def parseGffFile(gffFileName, featureType, fast):
+def parseGffFile(gffFileName, featureType, fast, union):
     '''
     Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
     Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)
@@ -207,7 +217,7 @@ def parseGffFile(gffFileName, featureType, fast):
             print("   Reading in annotation and saving archive for faster future runs") 
             if not os.path.exists( str("/".join(archiveFilePath.split('/')[:-1])) ):
                 os.makedirs( str("/".join(archiveFilePath.split('/')[:-1])) )
-            gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
+            gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union)
             archiveOut = open(archiveFilePath, 'wb')
             pickle.dump(gas, archiveOut, -1) ### pickle feature only works with full annotation files
             pickle.dump(knownFeatures, archiveOut, -1)
@@ -215,7 +225,7 @@ def parseGffFile(gffFileName, featureType, fast):
             archiveOut.close()
     if not bool(fast):
     # ignore pickles function entirely. Won't check for it and won't attempt to create it
-        gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures)
+        gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union)
 
     if duplicateFeatures:
         print("*** WARNING: {0} {1}s found on more than one contig".format(len(duplicateFeatures), featureType))
@@ -443,7 +453,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
 
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
-    
+        
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
     varDF = pd.DataFrame(varD, columns=columns)
     # Dataframe operation to count the number of samples that exhibit each mutation
@@ -506,7 +516,7 @@ def main():
     #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise having many vcf files and 1 sample ID]
     total = len(set(config.samples))
 
-    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast)
+    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast, config.union)
 
     varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
 
