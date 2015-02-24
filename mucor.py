@@ -67,12 +67,12 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union):
             continue
 
         # skip full transcripts, full genes, and other items that are not exon ranges
+        # including these lines will create '--union'-like behavior, regardless of whether the user passed the union option
         if feature.type != 'exon':
             continue
 
         # transform feature to instance of Class MucorFeature
         feat = MucorFeature(feature.attr[featureType], feature.type, feature.iv)
-        feat2 = feat
         
         # WARNING
         # the following REQUIRES a coordinate-sorted GFF/GTF file
@@ -98,6 +98,11 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union):
                 else:
                     pass # no-union - this does overwrite previous coordinates in knownFeatures,
                          # but should not matter as the actual coordinates are obtaind from 'gas'.
+                         # Locations held in knownFeatures should not be used to identify the start and stop of a feature,
+                         # since these locations will only reveal the last known region for the feature. 
+                         # Later in the program, querying knownFeatures for the variants in a feature (ie: skipThisIndel function)
+                         # may return variants that appear to be located in positions outside of the feature region reported by knownFeatures. 
+                         # This is also caused by the 'no-union' overwrite, since the knownFeature region locations do not represent the whole feature.
 
         # first, add to the knownFeatures, a dictionary of MucorFeatures, which contain the variants set
         knownFeatures[feat.name] = feat
@@ -138,20 +143,6 @@ def parseJSON(json_config):
     # comma separated list of acceptable VCF filter column values
     config.filters = JD['filters']
 
-    '''
-    global database_switch
-    # if any databases are defined, switch the database_switch ON (True)
-    # if no databases are defined, config.database will be [] and database_switch will be OFF (False)
-    if 'tabix' in sys.modules:
-        database_switch = bool(config.databases)
-    else:
-        database_switch = bool(False)
-
-    
-    global SnpEff_switch
-    # works similar to database switch above.
-    SnpEff_switch = False
-    '''
     config.inputFiles = []
     config.samples = []
     for i in JD['samples']:
@@ -160,10 +151,6 @@ def parseJSON(json_config):
             filename = str(j['path']).split('/')[-1]
             config.filename2samples[filename] = i['id']
             config.source[filename] = j['source']
-            '''
-            if not SnpEff_switch and str(j['type']) == str('vcf') and bool(j['snpeff']) == bool(True):
-                SnpEff_switch = bool(True)
-            '''
             config.inputFiles.append(j['path'])
 
     return config 
@@ -180,9 +167,13 @@ def parseGffFile(gffFileName, featureType, fast, union):
     startTime = time.clock()
     print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
     
+    if union:
+        unionstatus = str("union")
+    else:
+        unionstatus = str("no_union")
     annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
     # pickled file is created for specific combinations of gff annotation and feature type. See below for more details. **
-    archiveFilePath = str("/") + str(fast).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str('.p')
+    archiveFilePath = str("/") + str(fast).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str("_") + unionstatus + str('.p')
     print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
     
@@ -230,6 +221,32 @@ def parseGffFile(gffFileName, featureType, fast, union):
     if duplicateFeatures:
         print("*** WARNING: {0} {1}s found on more than one contig".format(len(duplicateFeatures), featureType))
 
+    if union and "gene" in featureType:
+        try:
+            badGeneList = open('union_incompatible_genes.txt')
+            print("Removing genes with multiple copies on the same contig, which cause incorrect feature bins with 'union'")
+            for line in badGeneList:
+                badGene = line.strip()
+                for sets in gas[ knownFeatures[badGene].iv ]:
+                    if badGene in sets:
+                        sets.discard(badGene)
+                    else:
+                        pass
+                    
+                try:
+                    del knownFeatures[badGene]
+                    print(badGene + " deleted from knownfeat")
+                except:
+                    pass
+        except:
+            # There likely isn't a list of genes
+            # Recommend that the user obtain said list, or face potential errors in feature labels and counts
+            pass
+    else:
+        # not using a gene_name-type of feature in combination with --union
+        # no known issues should arise with this configuration 
+        pass
+    #pdb.set_trace() # the program is still somehow encountering the deleted keys later on
     totalTime = time.clock() - startTime
     print("{0} sec\t{1} found:\t{2}".format(int(totalTime), featureType, len(knownFeatures)))
 
@@ -283,7 +300,7 @@ def skipThisIndel(var, knownFeatures, featureName):
         Ex: ref/alt: A/AT compared to ref/alt: ATT/ATTT
         The refs and the alts are different, but both mutations represent the same T insertion
     '''
-    if len(var.ref) != len(var.alt):
+    if len(var.ref) != len(var.alt): # confirm that this mutation is an indel, not a snv
         for kvar in knownFeatures[featureName].variants: # "kvar" stands for "known variant"
             if kvar.pos.pos == var.pos.pos and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
                 return (kvar.ref, kvar.alt)
@@ -309,13 +326,15 @@ def groupCount(grp):
     grp['count'] = len(grp['sample'])
     return grp
 
-def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total): 
+def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
     '''
     Read in all input files
     Record mutations in the variant dataframe 
     '''
 
     startTime = time.clock()
+    unrecognizedContigs = set()
+    unrecognizedMutations = 0
 
     # All variants stored in long (record) format
     # in a pandas dataframe
@@ -401,9 +420,17 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 continue
 
             # find bin for variant location
-            resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-            if resultSet:                   # which I'll use as a key on the knownFeatures dict
-                #                           # and each feature with matching ID gets allocated the variant
+            try:
+                resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
+            except KeyError:                    # which I'll use as a key on the knownFeatures dict
+                                                # and each feature with matching ID gets allocated the variant
+                # this mutation is on a contig unknown to the GAS
+                resultSet = set()
+                unrecognizedContigs.add(var.pos.chrom)
+                unrecognizedMutations += 1
+            pdb.set_trace()                
+            if resultSet:                   
+                #                           
                 for featureName in resultSet:
                     kvar = skipThisIndel(var, knownFeatures, featureName)
                     if bool(kvar):
@@ -420,12 +447,12 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             alt = var.alt 
             vf = var.frac
             dp = var.dp
-            features = ', '.join( gas[ var.pos ] )   # join with comma to handle overlapping features
+            features = ', '.join( resultSet )   # join with comma to handle overlapping features
             effect = var.eff
             fc = var.fc
             sample = config.filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
-            dbEntries = dbLookup(var, databases)
+            dbEntries, dbVAFs = dbLookup(var, databases)
             count = 0 # initialize this database column now to save for later
             freq = 0.0 # initialize this database column now to save for later
 
@@ -442,18 +469,27 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
 
                 for dbName in sorted(dbEntries.keys()):
+                    # add columns to the variants dictionary for each user-supplied vcf database 
                     columns.append(dbName)
                     values.append(dbEntries[dbName])
+                    # if a vcf database has known, population allele frequencies, add another column for those
+                    try:
+                        values.append(dbVAFs[dbName].split('=')[1])
+                        columns.append(dbName + "_VAF")
+                    except KeyError:
+                        # this database does not have AF in the INFO field
+                        pass
                 columns += ['count', 'freq', 'sample','source']
                 values  += [ count,   freq,   sample,  source ]
 
                 vardata = dict(zip( columns, values ))
                 for key in vardata.keys():
                     varD[key].append(vardata[key])
-
+        if unrecognizedContigs:
+            throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
-        
+
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
     varDF = pd.DataFrame(varD, columns=columns)
     # Dataframe operation to count the number of samples that exhibit each mutation
@@ -470,6 +506,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     #   this is important to later functions that put feature in a pandas index. na_rep pandas function only changes dataframe values, not the index.
     #   see output.FeatureXSample() for an example of when 'feature' is used in a pandas index.
     varDF['feature'][varDF.feature == ''] = 'NO_FEATURE'
+    # replace all remaining blank cells with '?'
+    varDF.replace('', '?', inplace=True)
 
     return varDF, knownFeatures, gas 
 
@@ -513,29 +551,13 @@ def main():
 
     # Total is used in frequency calculations. 
     #   supplying config.samples will use sample count as the denominator [canonical operation, ie: comparing samples]
-    #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise having many vcf files and 1 sample ID]
+    #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise comparing many vcf files with no regard for sample ID]
     total = len(set(config.samples))
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast, config.union)
 
     varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
-
     printOutput(config, str(config.outputDir), varDF)
-    
-    ## ## ##
-    # print record format (long format) all variants data frame
-    # TO DO : break out into function to slicing and dicing
-    #if (varDF['chr'][0].lower().startswith(('chr', 'Chr'))):
-    #    varDF['chr_num'] = varDF['chr'].apply(lambda x:x[3:]).astype(int)   # strip off the 'chr', unstringify
-    #    varDF.sort(columns=['chr_num', 'pos'], inplace=True)
-    #   varDF.drop(['chr_num'], axis=1, inplace=True)
-    #else: 
-    
-    # sorting by chr does not sort properly: lexical order is chr1,chr10,...,chr2,...
-    # so we will sort by feature (gene etc.) then position
-    ##varDF.sort(columns=['feature','pos'], inplace=True)
-    ##varDF.replace('', np.nan, inplace=True)
-    ##varDF.to_csv(outputDir + '/allvars.txt', sep="\t", na_rep='?', index=False)
     
     # pretty print newline before exit
     print()

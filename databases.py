@@ -47,6 +47,7 @@ def dbLookup(var, dbs):
     epos = int(var.pos.pos)         # end position
 
     dbEntries = {}
+    dbVAFs = {}
 
     for source, db in dbs.items():
         if not os.path.exists(db):
@@ -80,9 +81,24 @@ def dbLookup(var, dbs):
                         if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
                             # 3rd column (zero indexed = [2])
                             # in a VCF is the ID
-                            dbEntries[source] = row[2]
+                            ID = row[2]
+
+                            # check for known population allele frequencies in the database VCF
+                            if "AF=" in row[7]:
+                                for item in row[7].split(';'):
+                                    if item.startswith('AF='):
+                                        dbVAFs[source] = item
+                                        break
+
+                            if ID == ".":
+                                # a '.' indicates it is annotated, but no RS number. 
+                                # different from a '?', which indicates not-annotated
+                                # this is more clear
+                                ID = "PRESENT"
+                            dbEntries[source] = ID
+                            
                 except tabix.TabixError:
                     pass
                     #there are no mutations on this variant's contig, in this particular database 
                         
-    return dbEntries
+    return dbEntries, dbVAFs
