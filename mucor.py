@@ -190,8 +190,8 @@ def parseGffFile(gffFileName, featureType, fast, union):
 
     # Fast boolean determines whether the user wants to load a pickle file annotation that they made in a previous run
     # The pickle file will load the genomic array of sets, known features, and duplicate features. 
-    # ** These three items will change depending on the supplied gff annotation AND the feature selected. 
-    #    Thus, each pickle file will be for a specific combination of gff and feature, hence the naming convention.
+    # ** These three items will change depending on the supplied gff annotation AND the feature selected AND whether union was used. 
+    #    Thus, each pickle file will be for a specific combination of gff, feature, and union status, hence the naming convention.
     if bool(fast):
         # user wants to use pickled annotations
         if os.path.exists( archiveFilePath ):
@@ -203,14 +203,14 @@ def parseGffFile(gffFileName, featureType, fast, union):
             duplicateFeatures = pickle.load(pAnnot)
             pAnnot.close()
         else:
-            # no pickled annotation exists for this combination of gff and feature; creating it in the same directory as this mucor.py file
+            # no pickled annotation exists for this combination of gff and feature; creating it in the directory provided to the 'fast' option
             print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType))
             print("   Reading in annotation and saving archive for faster future runs") 
             if not os.path.exists( str("/".join(archiveFilePath.split('/')[:-1])) ):
                 os.makedirs( str("/".join(archiveFilePath.split('/')[:-1])) )
             gas, knownFeatures, duplicateFeatures = constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union)
             archiveOut = open(archiveFilePath, 'wb')
-            pickle.dump(gas, archiveOut, -1) ### pickle feature only works with full annotation files
+            pickle.dump(gas, archiveOut, -1)
             pickle.dump(knownFeatures, archiveOut, -1)
             pickle.dump(duplicateFeatures, archiveOut, -1)
             archiveOut.close()
@@ -220,7 +220,8 @@ def parseGffFile(gffFileName, featureType, fast, union):
 
     if duplicateFeatures:
         print("*** WARNING: {0} {1}s found on more than one contig".format(len(duplicateFeatures), featureType))
-
+    '''
+    WIP
     if union and "gene" in featureType:
         try:
             badGeneList = open('union_incompatible_genes.txt')
@@ -247,6 +248,7 @@ def parseGffFile(gffFileName, featureType, fast, union):
         # no known issues should arise with this configuration 
         pass
     #pdb.set_trace() # the program is still somehow encountering the deleted keys later on
+    '''
     totalTime = time.clock() - startTime
     print("{0} sec\t{1} found:\t{2}".format(int(totalTime), featureType, len(knownFeatures)))
 
@@ -428,9 +430,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 resultSet = set()
                 unrecognizedContigs.add(var.pos.chrom)
                 unrecognizedMutations += 1
-            pdb.set_trace()                
-            if resultSet:                   
-                #                           
+           
+            if resultSet:
                 for featureName in resultSet:
                     kvar = skipThisIndel(var, knownFeatures, featureName)
                     if bool(kvar):
@@ -466,19 +467,16 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             for feature in features.split(', '):
                 # Removing columns from the following 'columns' list will mask them from output
                 columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
-                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc]
+                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc ]
 
                 for dbName in sorted(dbEntries.keys()):
                     # add columns to the variants dictionary for each user-supplied vcf database 
                     columns.append(dbName)
                     values.append(dbEntries[dbName])
-                    # if a vcf database has known, population allele frequencies, add another column for those
-                    try:
-                        values.append(dbVAFs[dbName].split('=')[1])
-                        columns.append(dbName + "_VAF")
-                    except KeyError:
-                        # this database does not have AF in the INFO field
-                        pass
+                    # add another column for known, population allele frequencies
+                    #    adds "?" if VAFs are not annotated in the vcf database or if the particular mutation is not annotated
+                    values.append(dbVAFs[dbName])
+                    columns.append(dbName + "_VAF")
                 columns += ['count', 'freq', 'sample','source']
                 values  += [ count,   freq,   sample,  source ]
 
@@ -486,9 +484,16 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 for key in vardata.keys():
                     varD[key].append(vardata[key])
         if unrecognizedContigs:
-            throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
+            throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
+
+    # Delete VAF columns from databases that do not have population variant allele frequencies recorded
+    # These will manifest as a whole VAF column full of '?' 
+    for column in varD.keys():
+        if "_VAF" in str(column) and len(set(varD[column])) == 1:
+            del varD[column]
+            columns.remove(column)
 
     # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
     varDF = pd.DataFrame(varD, columns=columns)

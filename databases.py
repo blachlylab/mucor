@@ -55,7 +55,8 @@ def dbLookup(var, dbs):
         else:
             # 'source' is a variable used to title the column in the output
             # it is defined by the user in the configuration script step when generating the JSON file
-
+            # TO-DO: make a database object to perform and document these file checks. Goal is to run them once per database, rather than once per mutation. 
+            #        will improve runtime
             if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
                 try:
                     database = gzip.open(db)
@@ -73,9 +74,11 @@ def dbLookup(var, dbs):
             except StopIteration: 
                 print("Empty file {}".format(db))
 
+            # perform the database query 
             tb = tabix.open(db)
             if len(str(var.alt).split(',')) >= 1:
-                dbEntries[source] = '?'     # TO DO: Consider change to '.' or removal entirely
+                dbEntries[source] = '?'
+                dbVAFs[source] = '?'
                 try:
                     for row in tb.query(var.pos.chrom, spos, epos):
                         if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
@@ -87,7 +90,7 @@ def dbLookup(var, dbs):
                             if "AF=" in row[7]:
                                 for item in row[7].split(';'):
                                     if item.startswith('AF='):
-                                        dbVAFs[source] = item
+                                        dbVAFs[source] = item.split('=')[1]
                                         break
 
                             if ID == ".":
