@@ -129,7 +129,7 @@ def parseJSON(json_config):
 
     # write dictionary values into a more human-friendly config class
     config.featureType = JD['feature']
-    config.outputDir = JD['outputDir']
+    config.outputDir = os.path.expanduser(JD['outputDir'])
     config.union = JD['union']
     config.fast = JD['fast']
     config.gff = JD['gff']
@@ -173,7 +173,8 @@ def parseGffFile(gffFileName, featureType, fast, union):
         unionstatus = str("no_union")
     annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
     # pickled file is created for specific combinations of gff annotation and feature type. See below for more details. **
-    archiveFilePath = str("/") + str(fast).strip('/') + str("/") + str(annotFileName) + str('_') + str(featureType) + str("_") + unionstatus + str('.p')
+
+    archiveFilePath = os.path.expanduser(fast) + str("/") + str(annotFileName) + str('_') + str(featureType) + str("_") + unionstatus + str('.p')
     print(gffFileName)
     gffFile = HTSeq.GFF_Reader(gffFileName)
     
@@ -204,7 +205,7 @@ def parseGffFile(gffFileName, featureType, fast, union):
             pAnnot.close()
         else:
             # no pickled annotation exists for this combination of gff and feature; creating it in the directory provided to the 'fast' option
-            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType))
+            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType) + " and --union=" + str(union) )
             print("   Reading in annotation and saving archive for faster future runs") 
             if not os.path.exists( str("/".join(archiveFilePath.split('/')[:-1])) ):
                 os.makedirs( str("/".join(archiveFilePath.split('/')[:-1])) )
@@ -220,23 +221,23 @@ def parseGffFile(gffFileName, featureType, fast, union):
 
     if duplicateFeatures:
         print("*** WARNING: {0} {1}s found on more than one contig".format(len(duplicateFeatures), featureType))
-    '''
-    WIP
+    # remove gene-centric feature names that are known to have problematic bins caused by multiple copies on the same gene
+    # run the accompanying 'detect union bin errors' python script to generate a list of incompatible genes
     if union and "gene" in featureType:
         try:
-            badGeneList = open('union_incompatible_genes.txt')
-            print("Removing genes with multiple copies on the same contig, which cause incorrect feature bins with 'union'")
-            for line in badGeneList:
+            badGenes = open('union_incompatible_genes.txt')
+            badGeneList = set()
+            print("Removing genes with multiple copies on the same contig, which cause incorrect feature bins with 'union'\n\tUsing 'union_incompatible_genes.txt'")
+            for line in badGenes:
                 badGene = line.strip()
-                for sets in gas[ knownFeatures[badGene].iv ]:
-                    if badGene in sets:
-                        sets.discard(badGene)
-                    else:
-                        pass
-                    
+                badGeneList.add(badGene)
+            for interval, sets in gas.steps():
+                gas[interval] = set( [ x for x in sets if x not in badGeneList ] )
+            for badGene in badGeneList:
                 try:
                     del knownFeatures[badGene]
-                    print(badGene + " deleted from knownfeat")
+                    # uncomment below to see which genes are being deleted 
+                    # print(badGene + " deleted from knownfeat")
                 except:
                     pass
         except:
@@ -247,8 +248,7 @@ def parseGffFile(gffFileName, featureType, fast, union):
         # not using a gene_name-type of feature in combination with --union
         # no known issues should arise with this configuration 
         pass
-    #pdb.set_trace() # the program is still somehow encountering the deleted keys later on
-    '''
+
     totalTime = time.clock() - startTime
     print("{0} sec\t{1} found:\t{2}".format(int(totalTime), featureType, len(knownFeatures)))
 
@@ -326,6 +326,21 @@ def groupCount(grp):
     Oputput: returns a DataFrame
     '''
     grp['count'] = len(grp['sample'])
+    return grp
+
+def annotateDF(grp, databases):
+    '''
+    function to annotate variant dataframe with user-supplied vcf databases
+    '''
+    chrom = grp['chr'].unique()[0]
+    pos = grp['pos'].unique()[0]
+    ref = grp['ref'].unique()[0]
+    alt = grp['alt'].unique()[0]
+    var = Variant(source=None, pos=HTSeq.GenomicPosition(chrom, pos), ref=ref, alt=alt, frac=None, dp=None, eff=None, fc=None)
+    dbEntries, dbVAFs = dbLookup(var, databases)
+    for source, annot in dbEntries.items():
+        grp.insert(8, source, annot)
+        grp.insert(9, source + "_VAF", dbVAFs[source])
     return grp
 
 def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
@@ -433,7 +448,10 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
            
             if resultSet:
                 for featureName in resultSet:
-                    kvar = skipThisIndel(var, knownFeatures, featureName)
+                    try:
+                        kvar = skipThisIndel(var, knownFeatures, featureName)
+                    except:
+                        pdb.set_trace()
                     if bool(kvar):
                         # Sanity check to see what indels are being overwritten by existing vars
                         var.ref = kvar[0]
@@ -453,32 +471,18 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             fc = var.fc
             sample = config.filename2samples[str(fn.split('/')[-1])]
             source = os.path.split(fn)[1]
-            dbEntries, dbVAFs = dbLookup(var, databases)
             count = 0 # initialize this database column now to save for later
             freq = 0.0 # initialize this database column now to save for later
 
             # build dict to insert
             # Step 1: define the columns and their values
-            # Step 1b.The database columns are variable, ranging from zero to many
-            #         and must be inserted dynamically
             # Step 2. zip the column names and column values together into a dictionary
             # Step 3. Add this round to the master variants data frame dictinoary
 
             for feature in features.split(', '):
                 # Removing columns from the following 'columns' list will mask them from output
-                columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc']
-                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc ]
-
-                for dbName in sorted(dbEntries.keys()):
-                    # add columns to the variants dictionary for each user-supplied vcf database 
-                    columns.append(dbName)
-                    values.append(dbEntries[dbName])
-                    # add another column for known, population allele frequencies
-                    #    adds "?" if VAFs are not annotated in the vcf database or if the particular mutation is not annotated
-                    values.append(dbVAFs[dbName])
-                    columns.append(dbName + "_VAF")
-                columns += ['count', 'freq', 'sample','source']
-                values  += [ count,   freq,   sample,  source ]
+                columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
+                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
 
                 vardata = dict(zip( columns, values ))
                 for key in vardata.keys():
@@ -487,16 +491,31 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
+ 
+    # Transform data frame dictionary into pandas DF. Major speed increase compared to appending variants to the DF while reading the input files. 
+    try:
+        varDF = pd.DataFrame(varD, columns=columns)
+    except UnboundLocalError:
+        if not varD:            
+            # variant dictionary is empty, implying no variants were encountered and kept
+            abortWithMessage("Variant DataFrame is empty! No mutations passed filter")
+        else:
+            abortWithMessage("Could not convert Variant Dictionary into a DataFrame")
 
+    # Annotate dataframe using user-supplied vcf databases
+    if databases:
+        print("\n=== Comparing Your Variants to Known VCF Databases ===")
+        startTime = time.clock()
+        varDF = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature']).apply( annotateDF, databases=databases )
+        totalTime = time.clock() - startTime
+        print("{0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
+    
     # Delete VAF columns from databases that do not have population variant allele frequencies recorded
     # These will manifest as a whole VAF column full of '?' 
-    for column in varD.keys():
-        if "_VAF" in str(column) and len(set(varD[column])) == 1:
-            del varD[column]
-            columns.remove(column)
-
-    # Transform data frame dictionary into pandas DF. Major speed increase relative to appending the DF once per variant
-    varDF = pd.DataFrame(varD, columns=columns)
+    for column in varDF.keys():
+        if "_VAF" in str(column) and len(set(varDF[column])) == 1:
+            varDF.drop(column, axis=1, inplace=True)
+    
     # Dataframe operation to count the number of samples that exhibit each mutation
     varDF = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature']).apply(groupCount)
     # Divide the count for each row in varDF by the total sample count from the JSON config file. Represents the percent of the input samples that exhibit each mutation.
@@ -517,7 +536,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     return varDF, knownFeatures, gas 
 
 def printOutput(config, outputDirName, varDF):
-    '''Output statistics and variant details to the specified output directory.'''
+    '''Output run statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
@@ -537,11 +556,14 @@ def main():
     print("\t{0}".format(time.ctime() ) )
     print()
 
-    config = parseJSON(sys.argv[1])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("json", help="Pass 1 json config as an argument")
+    args = parser.parse_args()
+    config = parseJSON(args.json)
 
     if not os.path.exists(config.gff):
         abortWithMessage("Could not find GFF file {0}".format(config.gff))
-    if os.path.exists(config.outputDir) and os.listdir(config.outputDir):
+    if os.path.exists(config.outputDir) and [x for x in os.listdir(config.outputDir) if x in output.Writer().file_names.values() ]:
         abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(config.outputDir))
     elif not os.path.exists(config.outputDir):
         try:
