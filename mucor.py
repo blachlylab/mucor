@@ -448,10 +448,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
            
             if resultSet:
                 for featureName in resultSet:
-                    try:
-                        kvar = skipThisIndel(var, knownFeatures, featureName)
-                    except:
-                        pdb.set_trace()
+                    kvar = skipThisIndel(var, knownFeatures, featureName)
                     if bool(kvar):
                         # Sanity check to see what indels are being overwritten by existing vars
                         var.ref = kvar[0]
