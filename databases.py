@@ -55,8 +55,6 @@ def dbLookup(var, dbs):
         else:
             # 'source' is a variable used to title the column in the output
             # it is defined by the user in the configuration script step when generating the JSON file
-            # TO-DO: make a database object to perform and document these file checks. Goal is to run them once per database, rather than once per mutation. 
-            #        will improve runtime
             if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
                 try:
                     database = gzip.open(db)
