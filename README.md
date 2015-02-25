@@ -57,7 +57,7 @@ In addition, VAS can read the more detailed .out files produced by MuTect.
 Installation
 ============
 
-git clone https://bitbucket.org/blachlylab/vas.git
+git clone https://github.com/blachlylab/mucor.git
 
 Setup and Operation
 ===================
