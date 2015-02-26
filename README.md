@@ -131,7 +131,7 @@ Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcr
 Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times. Ex: -db name1:/full/user/path/name1.vcf.gz. Optional
 
 `-s SAMPLES, --samples SAMPLES`
-Text file containing sample names. One sample per line. Configuration may not be correct if any sample names are within another sample name. Ex: U-23 and U-238. U-23 would erroneously identify U-238 files, requiring manual modification of the JSON file. Required
+Text file containing sample names. One sample per line. `mucor_config.py` attempts to guess which files belong with which sample IDs using globbing (wildcard filename matching). This means that the auto-configuration may be incorrect if any sample names are contained within another sample name. Ex: U-23 and U-238. U-23 would erroneously identify U-238 files, requiring manual modification of the JSON file. Sample IDs U-023 and U-238 would not exhibit this problem. Required
 
 `-d PROJECT_DIRECTORY, --project_directory PROJECT_DIRECTORY`
 Working/project directory, in which to find variant call files to aggregate. Variant calls can be in the provided directory, or any of its subdirectories. Default: current working directory
