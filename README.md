@@ -104,8 +104,10 @@ Setup and Operation
 Overview
 --------
 Running Mucor to aggregate and summarize variants is a two step process:
+
 1. Project setup / configuration
     * `mucor_config.py` creates a JSON config file
+
 2. Aggregation (MuCorrelate!)
     * `mucor.py` 
 
