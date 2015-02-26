@@ -33,6 +33,17 @@ class Writer(object):
                                     "all": self.All,
                                     "runinfo": self.RunInfo }
 
+        self.file_names        = {  "counts": "counts.txt",
+                                    "txt": "variant_details.txt",
+                                    "longtxt": "long_variant_details.txt",
+                                    "xls": "variant_details.xls",
+                                    "longxls": "long_variant_details.xls",
+                                    "bed": "variant_locations.bed",
+                                    "featXsamp": "feature_by_sample.xls",
+                                    "featmutXsamp": "feature_and_mutation_by_sample.xls",
+                                    "vcf": "variant_locations.vcf",
+                                    "runinfo": "run_info.txt" }
+
     def write(self, data, format, outputDirName, config):
         '''
         Write data in format to outputDirName
@@ -65,9 +76,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('runinfo')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['runinfo']
         config = self.config
         try: 
-            ofRunInfo = open(outputDirName + "/run_info.txt", 'w+')
+            ofRunInfo = open(outputDirName + "/" + outputFileName, 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
         # =========================
@@ -93,9 +105,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('counts')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['counts']
         varDF = self.data
         try:
-            ofCounts = open(outputDirName + "/counts.txt", 'w+')
+            ofCounts = open(outputDirName + "/" + outputFileName, 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
@@ -139,9 +152,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('featXsamp')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['featXsamp']
         varDF = self.data
         try:
-            ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/feature_by_sample.xls")
+            ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
@@ -154,7 +168,7 @@ class Writer(object):
             return True
         outDF.to_excel(ofFeatureXSample, 'Feature by Sample', na_rep=0, index=True)
         ofFeatureXSample.save()
-        print("\t{0}: {1} rows".format(str(outputDirName) + "/feature_by_sample.xls", len(outDF)))        
+        print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
 
     def Feature_and_MutationXSample(self):
@@ -167,9 +181,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('featmutXsamp')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['featmutXsamp']
         varDF = self.data
         try:
-            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/feature_and_mutation_by_sample.xls")
+            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
@@ -182,7 +197,7 @@ class Writer(object):
             return True
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()
-        print("\t{0}: {1} rows".format(str(outputDirName) + "/feature_and_mutation_by_sample.xls", len(outDF)))        
+        print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
 
     def VariantDetails(self):
@@ -198,6 +213,7 @@ class Writer(object):
         '''
 
         outputDirName = self.outputDirName
+        
         varDF = self.data
         if 'txt' in self.config.outputFormats and 'txt' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/variant_details.txt"):
             txt = bool(True)
@@ -212,9 +228,11 @@ class Writer(object):
 
         try:
             if txt:
-                ofVariantDetailsTXT = open(outputDirName + "/variant_details.txt", 'w+')
+                outputFileName = self.file_names['txt']
+                ofVariantDetailsTXT = open(outputDirName + "/" + outputFileName, 'w+')
             if xls:
-                ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/variant_details.xls')
+                outputFileName = self.file_names['xls']
+                ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
@@ -235,7 +253,7 @@ class Writer(object):
             # print the new, collapsed dataframe to file a
             out.sort(['feature','pos']).to_excel(ofVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
             ofVariantDetailsXLS.save()
-            print("\t{0}: {1} rows".format(str(outputDirName + '/variant_details.xls'), len(out)))
+            print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(out)))
 
         return True
 
@@ -248,6 +266,7 @@ class Writer(object):
         Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
         '''
         outputDirName = self.outputDirName
+        
         varDF = self.data
 
         if 'longtxt' in self.config.outputFormats and 'longtxt' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/long_variant_details.txt"):
@@ -263,20 +282,22 @@ class Writer(object):
 
         try:
             if longtxt:
-                ofLongVariantDetailsTXT = open(outputDirName + "/long_variant_details.txt", 'w+')
+                outputFileName = self.file_names['longtxt']
+                ofLongVariantDetailsTXT = open(outputDirName + "/" + outputFileName, 'w+')
                 varDF.sort(['feature','pos']).to_csv(ofLongVariantDetailsTXT, sep='\t', na_rep='?', index=False)
                 ofLongVariantDetailsTXT.close()
-                print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.txt'), len(varDF)))
+                print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
                     
             if longxls:
+                outputFileName = self.file_names['longxls']
                 # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
                 if len(varDF) >= 65536:
                     throwWarning("longxls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(varDF)))
                     return True
-                ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/long_variant_details.xls')
+                ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
                 varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
                 ofLongVariantDetailsXLS.save()
-                print("\t{0}: {1} rows".format(str(outputDirName + '/long_variant_details.xls'), len(varDF)))
+                print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
 
@@ -290,9 +311,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('bed')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['bed']
         varDF = self.data
         try:
-            ofVariantBeds = open(outputDirName + "/variant_locations.bed", 'w+')
+            ofVariantBeds = open(outputDirName + "/" + outputFileName, 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
@@ -310,9 +332,10 @@ class Writer(object):
         '''
         self.attempted_formats.append('vcf')
         outputDirName = self.outputDirName
+        outputFileName = self.file_names['vcf']
         varDF = self.data
         try:
-            ofVariantVCF = open(outputDirName + "/variant_locations.vcf", 'w+')
+            ofVariantVCF = open(outputDirName + "/" + outputFileName, 'w+')
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
         

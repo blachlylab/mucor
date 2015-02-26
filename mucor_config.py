@@ -17,6 +17,7 @@ import codecs
 
 # mucor modules
 from config import Config
+import output
 
 def abortWithMessage(message, help = False):
     print("*** FATAL ERROR: " + message + " ***")
@@ -308,9 +309,12 @@ def main():
     parser.add_argument("-outt", "--output_type", default="default", help="Comma separated list of desired output types. Options include: counts, txt, longtxt, xls, longxls, bed, featXsamp, featmutXsamp, all. Default: counts,txt")
     args = parser.parse_args()
 
-    # Verify that required files and directoreis exist and/or are writable
+    # Verify user inputs
+    # Does the gtf exist?
     if not os.path.exists(args.gff):
         abortWithMessage("Could not find GFF file {0}".format(args.gff))
+
+    # Do the database VCFs exist, and are they named properly?
     if args.databases:
         for db in args.databases:
             try:
@@ -318,20 +322,25 @@ def main():
                     abortWithMessage("Could not find SNV DB file {0}".format(db.split(':')[1]))
             except IndexError: # user did not give a name and path, separated by colon
                 abortWithMessage("Cannot process {0}\n\tDatabase input must be colon delimited as, 'database_name:database_path'".format(db))
+
+    # Is there a project directory defined? If not, use current working directory
     if not args.project_directory or not os.path.exists(args.project_directory):
         print("Project directory not found; using CWD")
         proj_dir = os.getcwd()
     else:
         proj_dir = args.project_directory
+
+    # Will this output overwrite an existing JSON config file?
     if os.path.exists(args.json_config_output):
         abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
-    if os.path.exists(args.output_directory) and os.listdir(args.output_directory):
+
+    # Does the given output directory exist and contain output already?
+    if os.path.exists(args.output_directory) and [x for x in os.listdir(args.output_directory) if x in output.Writer().file_names.values() ]:
         abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output_directory))
     elif not os.path.exists(args.output_directory):
-        try:
-            os.makedirs(args.output_directory)
-        except:
-            abortWithMessage("Error when creating output directory {0}".format(args.output_directory))
+        # If it does not exist, is the parent directory writable?
+        if not os.access("/".join(args.output_directory.split('/')[:-1]), os.W_OK):
+            abortWithMessage("Output directory {0} not writable".format(args.output_directory))
 
     # Construct JSON dictionary and dump it to the config file
     json_dict = getJSONDict(args, proj_dir)
