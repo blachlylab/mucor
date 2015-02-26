@@ -50,6 +50,7 @@ def dbLookup(var, dbs):
     dbVAFs = {}
 
     for source, db in dbs.items():
+        db = os.path.expanduser(db)
         if not os.path.exists(db):
             pass
         else:
