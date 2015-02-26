@@ -182,23 +182,23 @@ Output File Formats
 -------------------
 Output types are specified at the time of configuration. The user may select any number and combination of output types from the list below.  
 
-####all
+**all**
 Execute all output types
 
 **counts**
-Print counts of mutations per feature. Output: counts.txt
+Print counts of mutations per feature. Output: `counts.txt`
 
 **txt**
-Print all information about each variant, with one-per-row, irrespective of how many samples in which it appears. Useful for variant-centric projects. Identical to xls in layout. Output: variant_details.txt
+Print all information about each variant, with one-per-row, irrespective of how many samples in which it appears. Useful for variant-centric projects. Identical to xls in layout. Output: `variant_details.txt`
 
 **longtxt**
-Similar to txt above, but writes each instance of a variant to a new row. Each variant is written once per source file, instead of combining recurrent variations into 1 unique row. Identical to longxls in layout. Output: long_variant_details.txt
+Similar to txt above, but writes each instance of a variant to a new row. Each variant is written once per source file, instead of combining recurrent variations into 1 unique row. Identical to longxls in layout. Output: `long_variant_details.txt`
 
 **xls**
-Print all information about each variant, with one-per-row, irrespective of how many samples in which it appears. Useful for variant-centric projects. Identical to txt in layout. Output: variant_details.xls/xlsx
+Print all information about each variant, with one-per-row, irrespective of how many samples in which it appears. Useful for variant-centric projects. Identical to txt in layout. Output: `variant_details.xls/xlsx`
 
 **longxls**
-Similar to xls above, but writes each instance of a variant to a new row. Each variant is written once per source file, instead of combining recurrent variations into 1 unique row. Identical to longtxt in layout. Output: long_variant_details.xls/xlsx
+Similar to xls above, but writes each instance of a variant to a new row. Each variant is written once per source file, instead of combining recurrent variations into 1 unique row. Identical to longtxt in layout. Output: `long_variant_details.xls/xlsx`
 
 _NB_: The XLS format has a hard limit of 2^16 rows; in long record format, a moderate sized study could exceed this (2,000 total variants/sample * 32 samples = 65,536 rows). Mucor can use Python's `xlwt` module to write .xls format, but it is preferrable to have `XlsxWriter` or `openPyxl` installed for .xlsx support.
 
@@ -239,6 +239,6 @@ Check the issue tracker at the github repository. Please report bugs and request
 
 Contact
 =======
-James S. Blachly, MD
+James S. Blachly, MD  
 james.blachly@osumc.edu
 
