@@ -339,8 +339,8 @@ def annotateDF(grp, databases):
     var = Variant(source=None, pos=HTSeq.GenomicPosition(chrom, pos), ref=ref, alt=alt, frac=None, dp=None, eff=None, fc=None)
     dbEntries, dbVAFs = dbLookup(var, databases)
     for source, annot in dbEntries.items():
-        grp.insert(8, source, annot)
-        grp.insert(9, source + "_VAF", dbVAFs[source])
+        grp.insert(len(grp.columns)-4, source, annot)
+        grp.insert(len(grp.columns)-4, source + "_VAF", dbVAFs[source])
     return grp
 
 def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
