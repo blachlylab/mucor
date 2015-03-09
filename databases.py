@@ -89,7 +89,7 @@ def dbLookup(var, dbs):
                             if "AF=" in row[7]:
                                 for item in row[7].split(';'):
                                     if item.startswith('AF='):
-                                        dbVAFs[source] = item.split('=')[1]
+                                        dbVAFs[source] = float(item.split('=')[1])
                                         break
 
                             if ID == ".":

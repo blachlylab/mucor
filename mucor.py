@@ -325,7 +325,7 @@ def groupCount(grp):
     Input: Acts on a pandas groupby object
     Oputput: returns a DataFrame
     '''
-    grp['count'] = len(grp['sample'])
+    grp['count'] = len(grp['sample'].unique())
     return grp
 
 def annotateDF(grp, databases):
@@ -470,7 +470,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             source = os.path.split(fn)[1]
             count = 0 # initialize this database column now to save for later
             freq = 0.0 # initialize this database column now to save for later
-
+            
             # build dict to insert
             # Step 1: define the columns and their values
             # Step 2. zip the column names and column values together into a dictionary
@@ -523,6 +523,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     # Clean up variant dataframe a little
     # position should be integer, not float
     varDF.pos   = varDF.pos.astype(int)
+    # depth should be integer, not string
+    varDF.dp   = varDF.dp.astype(int)
     # blank features should be more descriptive. this replaces empty strings with 'NO_FEATURE'. 
     #   this is important to later functions that put feature in a pandas index. na_rep pandas function only changes dataframe values, not the index.
     #   see output.FeatureXSample() for an example of when 'feature' is used in a pandas index.
