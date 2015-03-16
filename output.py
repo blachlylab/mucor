@@ -12,8 +12,6 @@ import pdb
 import time
 from info import Info
 
-import AKOut
-
 class Writer(object):
     """Object that parses the mucor dataframe and can write output in several different formats"""
     
@@ -45,16 +43,7 @@ class Writer(object):
                                     "featmutXsamp": "feature_and_mutation_by_sample.xlsx",
                                     "vcf": "variant_locations.vcf",
                                     "runinfo": "run_info.txt" }
-        # import an output module from a separate file
-        # first, make the function a bound method so it can be executed without explicitly passing the Writer object
-        self.SampleVariantDetails = AKOut.SampleVariantDetails.__get__(self,Writer) 
-        # add the desired formats to the supported_formats dict
-        self.supported_formats["svdtxt"] = self.SampleVariantDetails
-        self.supported_formats["svdxls"] = self.SampleVariantDetails
-        # add the desired output file names to the file_names dict
-        self.file_names["svdtxt"] = "sample_variant_details.txt"
-        self.file_names["svdxls"] = "sample_variant_details.xlsx"
-
+        
     def write(self, data, format, outputDirName, config):
         '''
         Write data in format to outputDirName
