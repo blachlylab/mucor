@@ -35,7 +35,7 @@ class Parser(object):
         self.fieldId = fieldId
         self.header = header
         self.fn  = fn
-        self.effect  = effect
+        self.eff  = effect
         self.fc = fc
         return self.supported_formats[self.source]()
 

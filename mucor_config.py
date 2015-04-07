@@ -298,15 +298,13 @@ def main():
         Join all items with same ID for feature_type (specified by -f)
         into a single, continuous bin. For example, if you want intronic
         variants counted with a gene, use this option. 
-        ** TO DO **
-        WARNING, this will likely lead to spurious results due to things
-        like MIR4283-2 which exists twice on + and - strand of the same
-        chromosome over 1 megabase apart. This creates one huge spurious
-        bin.
+        WARNING, this will lead to spurious results for features that are duplicated on the same contig.
+        When feature names are identical, the bin will range from the beginning of the first instance to the end of the last, even if they are several megabases apart.
+        Refer to the documentation for a resolution using 'detect_union_bin_errors.py'
         """)
     parser.add_argument("-jco", "--json_config_output", required=True, help="Name of JSON configuration output file")   
     parser.add_argument("-outd", "--output_directory", required=True, help="Name of directory in which to write Mucor output")
-    parser.add_argument("-outt", "--output_type", default="default", help="Comma separated list of desired output types. Options include: counts, txt, longtxt, xls, longxls, bed, featXsamp, featmutXsamp, all. Default: counts,txt")
+    parser.add_argument("-outt", "--output_type", default="default", help=str("Comma separated list of desired output types. Options include: " + str(output.Writer().supported_formats.keys()).replace("'","") + ". Default: counts,txt"))
     args = parser.parse_args()
 
     # Verify user inputs

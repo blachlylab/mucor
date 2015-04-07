@@ -2,6 +2,7 @@ import argparse
 import HTSeq
 import pdb # pdb.set_trace()
 import itertools
+import os
 from collections import defaultdict
 
 def FindProblems(featureDict):
@@ -66,7 +67,7 @@ def main():
                 features[name][feature.iv.chrom] = [(feature.iv.start,feature.iv.end)]
 
     problems = FindProblems(features)
-    WriteProblems(problems, args.output_directory)
+    WriteProblems(problems, os.path.expanduser(args.output_directory))
 
 if __name__ == "__main__":
     main()

@@ -90,7 +90,7 @@ These data are the data that you wish to aggregate and summarize. In theory, Muc
 * FreeBayes
 * Samtools
 
-In addition, VAS can read the more detailed .out files produced by MuTect.
+In addition, Mucor can read the more detailed .out files produced by MuTect.
 
 
 Installation
@@ -145,6 +145,10 @@ Specify directory in which to read/write archived annotations. This step will si
 `-r REGIONS, --regions REGIONS`
 Comma separated list of bed regions and/or bed files by which to limit output. Bed regions can be specific positions, or entire chromosomes. Ex: chr1:10230-10240,chr2,my_regions.bed. Optional
 
+`-u, --union`
+Join all items with same ID for feature_type (specified by -f) into a single, continuous bin. For example, if you want intronic variants counted with a gene, use this option. WARNING, this will lead to spurious results for features that are duplicated on the same contig. When feature names are identical, the bin will range from the beginning of the first instance to the end of the last, even if they are several megabases apart. Refer to the documentation for a resolution using 'detect_union_bin_errors.py.' Optional.
+
+
 `-jco JSON_CONFIG_OUTPUT, --json_config_output JSON_CONFIG_OUTPUT`
 Name of JSON configuration output file. This is the configuration file fed into Mucor. Required
 
@@ -155,6 +159,9 @@ Name of directory in which to write Mucor output. Required
 Comma separated list of desired output types. Options include: counts, txt, longtxt, xls, longxls, bed, featXsamp, featmutXsamp, all. Default: counts,txt
 (See the detailed description of [Output File Formats](#output-file-formats), below)
 
+Example:
+
+    python ./mucor_config.py -g ~/references/human/gencode/gencode.v19.annotation.gtf -f gene_name -s samples.txt -a ./fast -u -jco mucor_config.json -outd ./mucor_output -outt all -db 1000G:~/references/human/1000_genomes/chrm_1000Genomes.20130502.genotypes.vcf.gz -db dbsnp:~/references/human/dbsnp/common_all.hg19.sorted.leftalign.vcf.gz
 
 ### JSON config file
 
@@ -217,20 +224,21 @@ Print table of mutations per sample. Unlike **featXsamp**, this differentiates a
 
 Known Issues
 ============
-There is an issue when a variant file presents a contig that the pickled (archived) annotation does not have. The solution is to disable the archive feature by omitting the `-a` or `--archive_directory` option. This will permit the unknown contig in output, but all mutations on the unknown contig will be shown as having no feature. It may also be possible to make a new pickle file using an annotation GTF/GFF which does contain the contig in question.
+The --union feature will behave inappropriately when genomic feature names are duplicated on the same contig. For example, if gene "ABC" is duplicated on the beginning and the end of chromosome 1, the feature bin for gene "ABC" will cover the whole contig (from the beginning of the first copy of "ABC", to the end of the last copy). Users may select another feature type, such as gene_id, which is unique to every copy of a gene. Otherwise, users may run the included python script [detect_union_bin_errors.py] to detect potential bin errors. It accepts a feature_type, a GTF/GFF annotation, and an output directory. The output is a text file list of feature names likely to cause large bin errors. Place this text document into the working directory where Mucor will be executed. Mucor will automatically search for the text file by name ['union_incompatible_genes.txt'] in the current directory. 
+    
+    python ./detect_union_bin_errors.py -o ~/projects/mucor -g ~/references/human/gencode/gencode.v19.annotation.gtf -f gene_name
 
-    File "mucor/mucor.py", in parseVariantFiles
-      resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-    File "_HTSeq.pyx", line 521, in HTSeq._HTSeq.GenomicArray.__getitem__ (src/_HTSeq.c:10700)
-    KeyError: 
+There is an issue when a variant file presents a contig that the pickled (archived) annotation does not have. This will throw a warning that shows how many contigs were unknown, and how many mutations were encountered on these contigs. The solution is to disable the archive feature by omitting the `-a` or `--archive_directory` option. This will permit the unknown contig in output, but all mutations on the unknown contig will be shown as having no feature. 
 
-The VCF file needs to have columns #CHROM, POS … etc. The configuration script checks each VCF file for proper columns and will print a warning if any are missing or wrong. However, it does not halt execution and will include any malformed column VCF files and attempt to process them regardless. The main script may finish execution with the malformed VCF, but the output may be perturbed or useless.
+    *** WARNING: 18 Contigs and 39 mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it. *** 
+
+The VCF files need to have columns #CHROM, POS … etc. The configuration script checks each VCF file for proper columns and will print a warning if any are missing or wrong. However, it does not halt execution and will include any malformed column VCF files and attempt to process them regardless. The main script may finish execution with the malformed VCF, but the output may be perturbed or useless.
 
     File "mucor/inputs.py", in parse_VarScan
         position = int(row[fieldId['POS']])
     KeyError: 'POS'
 
-Users may not supply vcf files that have inconsistent 'effect' and/or 'functional consequence' for the same variant. Presumably, if the variant has the same location and reference and alternate allele, the effect and functional consequences would be predicted to be the same. The problem lies in collapsing mutations in the `variant_details` output type(s). This issue may arise when different platforms or pipelines are used for samples containing a common variant within a single run of VAS. If this is found to be more common than expected it will be worked around.
+Users may not supply vcf files that have inconsistent 'effect' and/or 'functional consequence' for the same variant. Presumably, if the variant has the same location and reference and alternate allele, the effect and functional consequences would be predicted to be the same. The problem lies in collapsing mutations in the `variant_details` output type(s). This issue may arise when different platforms or pipelines are used for samples containing a common variant within a single run of Mucor. If this is found to be more common than expected it will be worked around.
 
 Bug Reports and Issue Tracking
 ==============================
