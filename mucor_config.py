@@ -289,8 +289,8 @@ def main():
     parser.add_argument("-g", "--gff", required=True, help="Annotation GFF/GTF for feature binning")
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcript_name, transcript_id, etc. ")
     parser.add_argument("-db", "--database", dest='databases', default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times. Ex: -db name1:/full/user/path/name1.vcf.gz ")
-    parser.add_argument("-s", "--samples", required=True, help="Text file containing sample names. One sample per line.")
-    parser.add_argument("-d", "--project_directory", required=False, help="Working/project directory, in which to find input variant call files. Default: current working directory")
+    parser.add_argument("-s", "--samples", metavar='<sample_list.txt>', required=True, help="Text file containing sample names. One sample per line.")
+    parser.add_argument("-d", "--project_directory", metavar='<dirname>', required=False, help="Working/project directory, in which to find input variant call files. Default: current working directory")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow. Default: PASS") # the defualt value is applied later on in the getJSONDict function, not here.
     parser.add_argument("-a", "--archive_directory", default=False, help="Specify directory in which to read/write archived annotations. Undeclared will prevent using the annotation archive features.")
     parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
