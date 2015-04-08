@@ -43,9 +43,9 @@ def WriteProblems(problems, outputDir):
 
 def main():
     '''
-    This tool was designed to aid users running mucor with --union while using feature type = gene_name. 
-    It will find features with the same name on the same contig, which cause large, problematic feature bins when running mucor with --union.
-    The output is a text document to be placed into the current working directory where mucor will be executed
+    This tool was designed to aid users running Vaggregate with --union while using feature type = gene_name. 
+    It will find features with the same name on the same contig, which cause large, problematic feature bins when running Vaggregate with --union.
+    The output is a text document to be placed into the current working directory where Vaggregate will be executed
         It will be read automatically if present at runtimme
     '''
     

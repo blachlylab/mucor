@@ -13,7 +13,7 @@ import time
 from info import Info
 
 class Writer(object):
-    """Object that parses the mucor dataframe and can write output in several different formats"""
+    """Object that parses the vaggregate dataframe and can write output in several different formats"""
     
     def __init__(self):
         self.data = pd.DataFrame()
@@ -28,7 +28,8 @@ class Writer(object):
                                     "longxls": self.LongVariantDetails,
                                     "bed":self.VariantBed,
                                     "featXsamp": self.FeatureXSample,
-                                    "featmutXsamp": self.Feature_and_MutationXSample,
+                                    "mutXsamp": self.Feature_and_MutationXSample,
+                                    "mutXsampVAF": self.Feature_and_MutationXSampleVAF,
                                     "vcf": self.VCF,
                                     "all": self.All,
                                     "runinfo": self.RunInfo }
@@ -40,7 +41,8 @@ class Writer(object):
                                     "longxls": "long_variant_details.xlsx",
                                     "bed": "variant_locations.bed",
                                     "featXsamp": "feature_by_sample.xlsx",
-                                    "featmutXsamp": "feature_and_mutation_by_sample.xlsx",
+                                    "mutXsamp": "feature_and_mutation_by_sample.xlsx",
+                                    "mutXsampVAF": "feature_and_mutation_by_sample_vaf.xlsx",
                                     "vcf": "variant_locations.vcf",
                                     "runinfo": "run_info.txt" }
         
@@ -148,7 +150,7 @@ class Writer(object):
         Print counts per feature per sample.
         Sample names populate the table header and feature names populate the first column. The count per sample per feature are the table values.
 
-        Output: feature_by_sample.txt
+        Output: feature_by_sample.xlsx
         '''
         self.attempted_formats.append('featXsamp')
         outputDirName = self.outputDirName
@@ -177,11 +179,11 @@ class Writer(object):
         Sample names populate the table header and feature names populate the first column. Chromosome, position, ref, and alt populate the next columns.
         The table values are boolean: 1 for present mutation, 0 for missing mutation. 
 
-        Output: feature_and_mutation_by_sample.txt
+        Output: feature_and_mutation_by_sample.xlsx
         '''
-        self.attempted_formats.append('featmutXsamp')
+        self.attempted_formats.append('mutXsamp')
         outputDirName = self.outputDirName
-        outputFileName = self.file_names['featmutXsamp']
+        outputFileName = self.file_names['mutXsamp']
         varDF = self.data
         try:
             ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
@@ -193,7 +195,36 @@ class Writer(object):
         outDF.index = outDF.index.droplevel(5)
         # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
         if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
-            throwWarning("featmutXsamp: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
+            throwWarning("mutXsamp: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
+            return True
+        outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
+        ofFeature_and_MutationXSample.save()
+        print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
+        return True 
+
+    def Feature_and_MutationXSampleVAF(self):
+        '''
+        Print counts per mutation per sample.
+        Sample names populate the table header and feature names populate the first column. Chromosome, position, ref, and alt populate the next columns.
+        The table values are mutation VAF. 
+
+        Output: feature_and_mutation_by_sample_vaf.xlsx
+        '''
+        self.attempted_formats.append('mutXsampVAF')
+        outputDirName = self.outputDirName
+        outputFileName = self.file_names['mutXsampVAF']
+        varDF = self.data
+        try:
+            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+        pdb.set_trace()
+        groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
+        outDF = groupedDF.stack().unstack(5)
+        outDF.index = outDF.index.droplevel(5)
+        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
+        if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
+            throwWarning("mutXsampVAF: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
             return True
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()

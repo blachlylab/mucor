@@ -1,13 +1,13 @@
 # report.py
 #
 # create, format, and write an executive report
-# on the muCorrelated sample variants
+# on the aggregated sample variants
 
 import os
 import pandas as pd
 
 class Report(object):
-    '''Create, format, and write an executive report on the muCorrelated sample variants'''
+    '''Create, format, and write an executive report on the aggregated sample variants'''
     
     reporttypes = ['latex']    
     templates = ['report.tex']
