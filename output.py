@@ -218,15 +218,13 @@ class Writer(object):
             ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
             abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-        pdb.set_trace()
-        groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
-        outDF = groupedDF.stack().unstack(5)
-        outDF.index = outDF.index.droplevel(5)
+        outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
+        outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
         # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
         if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
             throwWarning("mutXsampVAF: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
             return True
-        outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
+        outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample VAF', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
@@ -326,7 +324,6 @@ class Writer(object):
                 if len(varDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
                     throwWarning("longxls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(varDF)))
                     return True
-                #pdb.set_trace()
                 ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
                 varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
                 ofLongVariantDetailsXLS.save()

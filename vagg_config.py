@@ -218,7 +218,7 @@ def getJSONDict(args, proj_dir):
     # Output formats
     json_dict['outputFormats'] = []
     for i in str(args.output_type).split(','):
-        json_dict['outputFormats'].append(str(i).lower())
+        json_dict['outputFormats'].append(str(i)) #.lower() was here for some reason
 
     # Samples and associated variant files
     for id in open(args.samples):
