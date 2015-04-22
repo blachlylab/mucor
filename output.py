@@ -224,7 +224,7 @@ class Writer(object):
         if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
             throwWarning("mutXsampVAF: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
             return True
-        outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample VAF', na_rep=0, index=True)
+        outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 

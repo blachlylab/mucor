@@ -51,47 +51,48 @@ def DetectDataType(fn):
     Only works with the expected formats, outlined below.
     Leverages the fact that most variant calling softwares output the name of the tool in every VCF header.
     '''
-
-    varFile = open(fn, 'r')
-    varReader = csv.reader(varFile, delimiter='\t')
     try:
-        row = varReader.next()
-    except StopIteration:
-        throwWarning("Empty file: {0}".format(fn))
+        varFile = open(fn, 'r')
+        varReader = csv.reader(varFile, delimiter='\t')
+        try:
+            row = varReader.next()
+        except StopIteration:
+            throwWarning("Empty file: {0}".format(fn))
+            return "Unknown"
+        while str(row).split("'")[1][0:2] == '##':
+            if str('Torrent Unified Variant Caller') in str(row): 
+                return "IonTorrent"
+                break
+            elif str('MiSeq') in str(row):
+                return "MiSeq"
+                break
+            elif str('SomaticIndelDetector') in str(row):
+                return "SomaticIndelDetector"
+                break
+            elif str('MuTect') in str(row):
+                return "Mutect"
+                break
+            elif str('muTector') in str(row):
+                return "muTector"
+                break
+            elif str('samtools') in str(row):
+                return "Samtools"
+                break
+            elif str('source=VarScan') in str(row):
+                return "VarScan"
+                break
+            elif str('ID=HaplotypeCaller') in str(row):
+                return "HaplotypeCaller"
+                break
+            elif str('freeBayes') in str(row):
+                return "FreeBayes"
+                break
+            elif str('source=GATK') in str(row):
+                return "GenericGATK"
+                break
+            row = varReader.next()
+    except:
         return "Unknown"
-    while str(row).split("'")[1][0:2] == '##':
-        if str('Torrent Unified Variant Caller') in str(row): 
-            return "IonTorrent"
-            break
-        elif str('MiSeq') in str(row):
-            return "MiSeq"
-            break
-        elif str('SomaticIndelDetector') in str(row):
-            return "SomaticIndelDetector"
-            break
-        elif str('MuTect') in str(row):
-            return "Mutect"
-            break
-        elif str('muTector') in str(row):
-            return "muTector"
-            break
-        elif str('samtools') in str(row):
-            return "Samtools"
-            break
-        elif str('source=VarScan') in str(row):
-            return "VarScan"
-            break
-        elif str('ID=HaplotypeCaller') in str(row):
-            return "HaplotypeCaller"
-            break
-        elif str('freeBayes') in str(row):
-            return "FreeBayes"
-            break
-        elif str('source=GATK') in str(row):
-            return "GenericGATK"
-            break
-        row = varReader.next()
-    return "Unknown"
 
 def DetectSnpEffStatus(fn):
     '''
