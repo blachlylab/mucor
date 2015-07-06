@@ -141,7 +141,7 @@ def blankJSONDict():
         tmpSampleDict = defaultdict()
         tmpSampleDict['id'] = str(sid)
         tmpSampleDict['files'] = list()
-        for root, dirs, files in ["project", "dir1", "sample1-a.vcf"], ["project", "dir2", "sample1-b.vcf"], ["project", "dir3", "sample2.vcf"]:
+        for root, dirs, files in ["project", "dir1", "sample1-a.vcf"], ["project", "dir1", "sample1.bam"], ["project", "dir2", "sample1-b.vcf"], ["project", "dir3", "sample2.vcf"], ["project", "dir3", "sample2.bam"]:
             if str(sid) in str(files): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
                 full_path = os.path.join(root, dirs, files)
                 source = "VarScan"
@@ -149,6 +149,12 @@ def blankJSONDict():
                     tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':False, 'source':source} )
                 elif str(files).split('.')[-1] == str("out"):
                     tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+                elif str(files).split('.')[-1] == str("bam"):
+                    try:
+                        tmpSampleDict['bam'].append({'path':str(full_path)} )
+                    except:
+                        tmpSampleDict['bam'] = list()
+                        tmpSampleDict['bam'].append({'path':str(full_path)})
             # Not sure if these still work 
                 elif str(files).split('.')[-1].lower() == str("maf"):
                     tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
@@ -237,7 +243,7 @@ def getJSONDict(args, proj_dir):
                     if str(sid) in str(i): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
                         full_path = os.path.join(root, i)
                         source = DetectDataType(full_path)
-                        if source == "Unknown":
+                        if source == "Unknown" and str(i).split('.')[-1] == str("vcf"):
                             throwWarning(full_path)
                             print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
                         elif str(i).split('.')[-1] == str("vcf"):
@@ -247,6 +253,12 @@ def getJSONDict(args, proj_dir):
                             tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
                         elif str(i).split('.')[-1] == str("out"):
                             tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+                        elif str(i).split('.')[-1] == str("bam"):
+                            try:
+                                tmpSampleDict['bam'].append({'path':str(full_path)} )
+                            except:
+                                tmpSampleDict['bam'] = list()
+                                tmpSampleDict['bam'].append({'path':str(full_path)} )
                     # Not sure if these still work 
                         elif str(i).split('.')[-1].lower() == str("maf"):
                             tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
