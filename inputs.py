@@ -1,5 +1,7 @@
 # inputs.py
+from __future__ import print_function
 import HTSeq
+import sys
 from variant import Variant
 import pdb
 
@@ -261,18 +263,38 @@ class Parser(object):
         fc = self.fc
         j = 0
         position = int(row[fieldId['POS']])
+        '''
+        for i in row[fieldId['INFO']].split(';'):
+            if i.startswith("DP="):
+                dp = i.split('=')[1]
+            if i.startswith("AF="):
+                vf1 = float(i.split('=')[1])
+        '''
         for i in row[fieldId['FORMAT']].split(':'):
             if str(i) == "DP":
                 dp = int(row[fieldId[header[-1]]].split(':')[j])
             if str(i) == "AD":
                 ad = str(row[fieldId[header[-1]]].split(':')[j])
                 if str(',') in ad:
-                    ref = int(ad.split(',')[0])
-                    alt = int(ad.split(',')[1])
-                    vf = float( float(alt)/(float(ref) + float(alt)) )
+                    ref_count = int(ad.split(',')[0])
+                    alt_count = int(ad.split(',')[1])
+                    try:
+                        vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
+                    except:
+                        vf=0.0
                 else:
                     abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
             j += 1
+        try:
+            vf
+        except:
+            print(row, file=sys.stderr)
+            vf = 0.0
+        try:
+            dp
+        except:
+            print(row, file=sys.stderr)
+            dp = 0.0
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
@@ -320,10 +342,15 @@ class Parser(object):
         position = int(row[fieldId['POS']])
         for i in row[fieldId['FORMAT']].split(':'):
             if str(i) == "AD":
-                ro = int(row[fieldId[header[-1]]].split(':')[j].split(',')[0])
-                ao = int(row[fieldId[header[-1]]].split(':')[j].split(',')[1])
+                ro = int(row[fieldId[header[-1]]].split(':')[j].split(',')[0]) 
+                #ao = int(row[fieldId[header[-1]]].split(':')[j].split(',')[-1]) # fails when the mutation has two alternate alleles in the same VCF line
+                ao = sum([int(x) for x in row[fieldId[header[-1]]].split(':')[j].split(',')[1:]])
                 dp = ro + ao
-                vf = float(float(ao)/float(dp))
+                try:
+                    vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
+                except:
+                    print("\nwarning: no vaf?\n" + str(row) + "\n")
+                    vf=0
                 break
             j += 1
 
