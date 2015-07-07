@@ -80,11 +80,15 @@ def parseRegionBed(regionfile, regionDictIn):
     '''
     regionDict = regionDictIn
     for line in open(str(regionfile),'r'):
-        col = line.split("\t")
+        col = line.strip().split("\t")
         chrom = col[0]
         start = col[1]
         end = col[2]
-        regionDict[chrom].add((start,end))
+        if len(col) > 3:
+            name = col[3]
+        else:
+            name = str(chrom) + ":" + str(start) + "-" + str(end)
+        regionDict[chrom].add((start,end,name))
     return regionDict
 
 def inRegionDict(chrom, start, end, regionDict):
@@ -119,7 +123,7 @@ def GaugeDepth(config) :
     if not regionDict:
         abortWithMessage("Regions not set!")
 
-    covD = {'chr':[], 'start':[], 'stop':[], 'sample':[],'depth':[]}
+    covD = {'chr':[], 'start':[], 'stop':[], 'name':[], 'sample':[],'depth':[]}
     print("\n=== Reading BAM Files ===")
     for sid, fns in config.bams.items():
         # loop over all samples
@@ -132,6 +136,7 @@ def GaugeDepth(config) :
                 continue
             for contig, ROI in regionDict.items():
                 for window in ROI:
+                    bed_name = window[2]
                     # make window 0
                     window = [int(window[0]) - 1, int(window[1])]
                     
@@ -182,13 +187,14 @@ def GaugeDepth(config) :
                     covD['chr'].append(str(contig))
                     covD['start'].append(int(window[0]) + 1)
                     covD['stop'].append(int(window[1]))
+                    covD['name'].append(str(bed_name))
                     covD['sample'].append(str(sid))
                     covD['depth'].append(float(avg_covg))     
             samfile.close()
             totalTime = time.clock() - startTime
             print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
-    covDF = pd.DataFrame.from_dict(covD)[['chr','start','stop','sample','depth']]
-    covDF = covDF.groupby(['chr','start','stop','sample'])['depth'].apply(sum).reset_index()
+    covDF = pd.DataFrame.from_dict(covD)[['chr','start','stop','name','sample','depth']]
+    covDF = covDF.groupby(['chr','start','stop','name','sample'])['depth'].apply(sum).reset_index()
             
     totalTime = time.clock() - startTime
     print("\n{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), "Done"))
@@ -196,8 +202,8 @@ def GaugeDepth(config) :
 
 def SamplesToColumns(grp):
     '''helper function to rearrange the coverage dataframe'''
-    columns = ['chr','start','stop']
-    values = [grp['chr'].values[0], grp['start'].values[0], grp['stop'].values[0]]
+    columns = ['chr','start','stop','name']
+    values = [grp['chr'].values[0], grp['start'].values[0], grp['stop'].values[0],grp['name'].values[0]]
 
     grp_dict = {}
     for i in grp[['sample','depth']].T.itertuples(): 
@@ -212,7 +218,7 @@ def printOutput(config, covDF):
 
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(config.outputDir))
-    outDF = covDF.groupby(['chr','start','stop']).apply(SamplesToColumns).reset_index(drop=True)
+    outDF = covDF.groupby(['chr','start','stop','name']).apply(SamplesToColumns).reset_index(drop=True)
     try:
         outXLSX = pd.ExcelWriter(str(config.outputDir) + "/" + config.outfile, engine='xlsxwriter')
     except:
