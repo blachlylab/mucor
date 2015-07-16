@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf8
 #
-# vagg.py
+# mucor.py
 # (c) James S Blachly, MD 2013
 # 
 
@@ -33,7 +33,7 @@ import pysam
 
 # optional modules
 
-# vaggregate modules
+# mucor modules
 from config import Config
 
 def abortWithMessage(message):
@@ -46,7 +46,7 @@ def throwWarning(message, help = False):
 
 def parseJSON(json_config):
     '''
-    Import the JSON config file from vagg_config.py. 
+    Import the JSON config file from mucor_config.py. 
     Reads the config file into a dictionary, then writes each dictionary entry into the respective Config class position.
     '''
     config = Config()
@@ -324,5 +324,5 @@ def main():
 
 if __name__ == "__main__":
     if sys.hexversion < 0x02070000:
-        raise RuntimeWarning("vaggregate should be run on python 2.7.0 or greater.")
+        raise RuntimeWarning("mucor should be run on python 2.7.0 or greater.")
     main()

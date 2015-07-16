@@ -18,7 +18,7 @@ class Parser(object):
             self.source = ''
 
             # Respective parse functions. 
-            # Keys are identical to the allowed formats in vagg_config.py
+            # Keys are identical to the allowed formats in mucor_config.py
             # Values are the parse functions defined below
             self.supported_formats = {  "MiSeq":self.parse_MiSeq,
                                         "IonTorrent":self.parse_IonTorrent,

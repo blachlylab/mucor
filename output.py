@@ -13,7 +13,7 @@ import time
 from info import Info
 
 class Writer(object):
-    """Object that parses the vaggregate dataframe and can write output in several different formats"""
+    """Object that parses the mucor dataframe and can write output in several different formats"""
     
     def __init__(self):
         self.data = pd.DataFrame()

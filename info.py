@@ -9,7 +9,7 @@ class Info:
                                                                                                                                           
 """
     version = "0.9"
-    versionInfo = "vaggregate version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
+    versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
     # usage needs to be updated, or eliminated if argparse can replace this function. 
     usage = """
 Usage:
@@ -52,9 +52,9 @@ Input files:
 """
     description = """
 
-vaggregate: Variant Aggregation
+mucor: Variant Aggregation
 
-vaggregate reads in variant files from a variety of sources (VCF, muTect .out)
+mucor reads in variant files from a variety of sources (VCF, muTect .out)
 and counts the number of mutations falling into known features. These are
 grouped together and output to see which features (genes) and which spec-
 -ific locations within those genes have the highest frequency of mutation
