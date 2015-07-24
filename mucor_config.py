@@ -368,7 +368,7 @@ def main():
         abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output_directory))
     elif not os.path.exists(args.output_directory):
         # If it does not exist, is the parent directory writable?
-        if not os.access("/".join(args.output_directory.split('/')[:-1]), os.W_OK):
+        if not os.access( os.path.split( os.path.abspath(args.output_directory) )[0], os.W_OK):
             abortWithMessage("Output directory {0} not writable".format(args.output_directory))
 
     # Construct JSON dictionary and dump it to the config file
