@@ -544,7 +544,11 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     # blank features should be more descriptive. this replaces empty strings with 'NO_FEATURE'. 
     #   this is important to later functions that put feature in a pandas index. na_rep pandas function only changes dataframe values, not the index.
     #   see output.FeatureXSample() for an example of when 'feature' is used in a pandas index.
-    varDF['feature'][varDF.feature == ''] = 'NO_FEATURE'
+    
+    # Avoid chained indexing:
+    # use DataFrame.loc[row_index, col_index]
+    varDF.loc[ varDF.feature == '', 'feature'] = 'NO_FEATURE'
+    
     # replace all remaining blank cells with '?'
     varDF.replace('', '?', inplace=True)
 
