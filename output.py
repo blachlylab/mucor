@@ -28,6 +28,9 @@ import pdb
 import time
 from info import Info
 
+from mucor import abortWithMessage
+from mucor import throwWarning
+
 class Writer(object):
     """Object that parses the mucor dataframe and can write output in several different formats"""
     
@@ -99,7 +102,7 @@ class Writer(object):
         try: 
             ofRunInfo = open(outputDirName + "/" + outputFileName, 'w+')
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         # =========================
         # run_info.txt
         #
@@ -128,8 +131,8 @@ class Writer(object):
         try:
             ofCounts = open(outputDirName + "/" + outputFileName, 'w+')
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         grouped = varDF.groupby('feature')
 
         numHits = grouped['sample'].count()
@@ -175,8 +178,8 @@ class Writer(object):
         try:
             ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         groupedDF = pd.DataFrame(varDF.groupby(['feature','sample']).apply(len))
         outDF = groupedDF.stack().unstack(1)
         outDF.index = outDF.index.droplevel(1)
@@ -204,8 +207,8 @@ class Writer(object):
         try:
             ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
         outDF = groupedDF.stack().unstack(5)
         outDF.index = outDF.index.droplevel(5)
@@ -233,7 +236,8 @@ class Writer(object):
         try:
             ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
         outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
         # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
@@ -280,8 +284,8 @@ class Writer(object):
                 outputFileName = self.file_names['xls']
                 ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         # Group by (chr, pos, ref, alt, feature)
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
         # apply collapsing function to each pandas group
@@ -305,17 +309,21 @@ class Writer(object):
 
     def LongVariantDetails(self):
         '''
-        Similar to printVariantDetails above, but writes each instance of a mutation to a new row. 
-        Each mutation is written once per source instead of combining reoccurring mutations in to 1 unique row.
+        Similar to printVariantDetails above, but writes each instance
+        of a mutation to a new row. 
+        Each mutation is written once per source instead of combining
+        reoccurring mutations in to 1 unique row.
         
         Output: long_variant_details.txt, long_variant_details.xls
-        Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
+        Note: switching the pandas ExcelWriter file extension to xlsx instead
+        of xls requires openpyxl
         '''
         outputDirName = self.outputDirName
         
         varDF = self.data
 
-        if 'longtxt' in self.config.outputFormats and 'longtxt' not in self.attempted_formats: # and not os.path.exists(outputDirName + "/long_variant_details.txt"):
+        if 'longtxt' in self.config.outputFormats and 'longtxt' not in self.attempted_formats:
+            # and not os.path.exists(outputDirName + "/long_variant_details.txt"):
             longtxt = bool(True)
             self.attempted_formats.append('longtxt')
         else:
@@ -345,8 +353,8 @@ class Writer(object):
                 ofLongVariantDetailsXLS.save()
                 print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         return True
 
     def VariantBed(self):
@@ -362,7 +370,8 @@ class Writer(object):
         try:
             ofVariantBeds = open(outputDirName + "/" + outputFileName, 'w+')
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
         out = grouped.apply(collapseVariantBed)
         out.sort(['chr','start']).to_csv(ofVariantBeds, sep='\t', na_rep='?', index=False, header=False)
@@ -383,8 +392,8 @@ class Writer(object):
         try:
             ofVariantVCF = open(outputDirName + "/" + outputFileName, 'w+')
         except:
-            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
-        
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+         
         #VCF header to stream
         ofVariantVCF.write("##fileformat=VCFv4.1\n")
         
@@ -501,11 +510,3 @@ def collapseVCF(group):
             info += str(feat) + " vf=" + vf + " dp=" + dp + "; "
     return pd.DataFrame(dict(zip(vcf_fields,[chrom, pos, none, ref, alt, none, none, info])), columns=vcf_fields)
 
-
-def abortWithMessage(message):
-    print("*** FATAL ERROR: " + message + " ***")
-    exit(2)
-
-def throwWarning(message, help = False):
-    print("*** WARNING: " + message + " ***")
-    return
