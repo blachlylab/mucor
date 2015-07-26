@@ -504,7 +504,10 @@ def collapseVCF(group):
     for sample in samples:
         info += str(sample) + ':'
         for feat in group[group['sample'] == sample]['feature'].values:
-            line = group[ (group.sample == sample) & (group.feature == feat) ]
+            #line = group[ (group.sample == sample) & (group.feature == feat) ]
+            # pandas 0.16.1 added pandas.DataFrame.sample() which breaks
+            # a query of form df.sample ==
+            line = group.query('(sample == @sample) and (feature == @feat)', engine='python') 
             vf = str(line['vf'].values[0])
             dp = str(line['dp'].values[0])
             info += str(feat) + " vf=" + vf + " dp=" + dp + "; "
