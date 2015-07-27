@@ -183,10 +183,6 @@ class Writer(object):
         groupedDF = pd.DataFrame(varDF.groupby(['feature','sample']).apply(len))
         outDF = groupedDF.stack().unstack(1)
         outDF.index = outDF.index.droplevel(1)
-        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-        if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
-            throwWarning("featXsamp: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
-            return True
         outDF.to_excel(ofFeatureXSample, 'Feature by Sample', na_rep=0, index=True)
         ofFeatureXSample.save()
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
@@ -212,10 +208,6 @@ class Writer(object):
         groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
         outDF = groupedDF.stack().unstack(5)
         outDF.index = outDF.index.droplevel(5)
-        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-        if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
-            throwWarning("mutXsamp: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
-            return True
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
@@ -240,10 +232,6 @@ class Writer(object):
         
         outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
         outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
-        # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-        if len(outDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
-            throwWarning("mutXsampVAF: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(outDF)))
-            return True
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
         ofFeature_and_MutationXSample.save()
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
@@ -296,10 +284,6 @@ class Writer(object):
             out.sort(['feature','pos']).to_csv(ofVariantDetailsTXT, sep='\t', na_rep='?', index=False)
             print("\t{0}: {1} rows".format(ofVariantDetailsTXT.name, len(out)))
         if xls:
-            # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-            if len(out) >= 65536 and outputFileName.split('.')[-1] == "xls":
-                throwWarning("xls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(out)))
-                return True
             # print the new, collapsed dataframe to file a
             out.sort(['feature','pos']).to_excel(ofVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
             ofVariantDetailsXLS.save()
@@ -344,10 +328,6 @@ class Writer(object):
                     
             if longxls:
                 outputFileName = self.file_names['longxls']
-                # check for xls filetype row limit. variant data frames with more than 65,535 lines will casue an error when dumping the data frame.
-                if len(varDF) >= 65536 and outputFileName.split('.')[-1] == "xls":
-                    throwWarning("longxls: There are too many mutations for an Excel xls file. {0} mutations, 65,536 lines maximum.".format(len(varDF)))
-                    return True
                 ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
                 varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
                 ofLongVariantDetailsXLS.save()

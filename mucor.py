@@ -41,7 +41,6 @@ import json
 # nonstandard modules
 import numpy as np
 import pandas as pd
-from pandas import ExcelWriter
 import HTSeq
 
 # optional modules
@@ -560,6 +559,21 @@ def printOutput(config, outputDirName, varDF):
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     ow = output.Writer()
+    # identify formats ending in 'xlsx' as the "excel formats," requiring XlsxWriter
+    excel_formats = [ plugin_name for plugin_name,file_name in ow.file_names.items() if file_name.split('.')[-1]=="xlsx" ]
+    if "all" in config.outputFormats:
+        # replace output type 'all' with a lsit of all supported output types
+        #    and remove 'all' and 'default' to prevent recursive execution of the modules
+        config.outputFormats = ow.supported_formats.keys()
+        config.outputFormats.remove('all')
+        config.outputFormats.remove('default')
+    try:
+        import xlsxwriter
+        # if this runs okay, config.outputFormats will remain intact 
+    except ImportError:
+        # skip output types that write excel files 
+        config.outputFormats = [ x for x in config.outputFormats if x not in excel_formats ]
+
     for format in config.outputFormats:
         ow.write(varDF,format,outputDirName,config)
 
