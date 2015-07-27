@@ -49,6 +49,11 @@ try:
 except ImportError:
     print("Tabix module not found; database features disabled")
 
+try:
+    import xlsxwriter
+except ImportError:
+    print("XlsxWriter module not found; excel output disabled")
+
 # mucor modules
 import mucorfilters as mf
 from variant import Variant
