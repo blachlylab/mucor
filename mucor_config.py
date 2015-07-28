@@ -54,7 +54,7 @@ def DetectMalformedColumns(fn):
     except StopIteration:
         throwWarning("Empty file: {0}".format(fn))
         return true
-    while str(row).split("'")[1][0:2] == '##':
+    while row[0].startswith('##'):
         row = varReader.next()
 
     if row[:9] != ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']:
@@ -76,7 +76,7 @@ def DetectDataType(fn):
         except StopIteration:
             throwWarning("Empty file: {0}".format(fn))
             return "Unknown"
-        while str(row).split("'")[1][0:2] == '##':
+        while row[0].startswith('##'):
             if str('Torrent Unified Variant Caller') in str(row): 
                 return "IonTorrent"
                 break
@@ -121,7 +121,7 @@ def DetectSnpEffStatus(fn):
         row = varReader.next()
     except StopIteration:
         abortWithMessage("Empty File: " + str(fn))
-    while str(row).split("'")[1][0:2] == '##':
+    while row[0].startswith('##'):
         if str('SnpEff') in str(row): 
             return True
             break

@@ -416,7 +416,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             print("Empty file {}".format(fn))
             continue    # next fn in variantFiles
 
-        while str(row).split("'")[1][0:2] == '##':
+        while row[0].startswith('##'):
             row = varReader.next()
 
         header = row
