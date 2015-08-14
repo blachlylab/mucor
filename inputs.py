@@ -329,6 +329,10 @@ class Parser(object):
         fc = self.fc
         j = 0
         position = int(row[fieldId['POS']])
+        if set(row[fieldId[header[-1]]].split(':')) == set(['.']):
+            # the sample data column is composed exclusively of period (missing data)
+            # skip this mutation in this sample
+            return False
         for i in row[fieldId['FORMAT']].split(':'):
             if str(i) == "DP":
                 dp = int(row[fieldId[header[-1]]].split(':')[j])

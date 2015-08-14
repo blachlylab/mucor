@@ -453,6 +453,9 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             parser = inputs.Parser()
             source = config.source[fn.split('/')[-1]]
             var = parser.parse(source, row, fieldId, header, fn, effect, fc)
+            if not var:
+                # this mutation had no data in this sample
+                continue
             if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
                 continue
 
