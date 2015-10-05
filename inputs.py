@@ -20,7 +20,11 @@ from __future__ import print_function
 import HTSeq
 import sys
 from variant import Variant
-import pdb
+from pdb import set_trace as stop
+
+def throwWarning(message, help = False):
+    print("*** WARNING: " + message + " ***")
+    return
 
 class Parser(object):
     '''Object to cover all parsing functions'''
@@ -56,7 +60,19 @@ class Parser(object):
         self.fn  = fn
         self.eff  = effect
         self.fc = fc
-        return self.supported_formats[self.source]()
+        try:
+            var = self.supported_formats[self.source]()
+        except KeyError:
+            throwWarning("File {0} cannot be parsed. No valid input module for source {1}".format(fn, source))
+            return None
+
+        if source != "GATK":
+            return var
+        else:
+            stop()
+
+    def HTSeq_parse(self):
+        stop()
 
     def parse_MiSeq(self):
         ''' MiSeq vcf parser function. Input: InputParser object. Output: Variant object '''

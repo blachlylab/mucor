@@ -35,7 +35,7 @@ import itertools
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-import pdb                             # Needed for pdb.set_trace()
+from pdb import set_trace as stop                             # Needed for pdb.set_trace()
 import json
 
 # nonstandard modules

@@ -24,7 +24,7 @@ import os
 import pandas as pd
 from config import Config
 import numpy as np
-import pdb
+from pdb import set_trace as stop
 import time
 from info import Info
 
@@ -437,8 +437,8 @@ def collapseVariantDetails(group):
             outvals.append(", ".join(outlist))
         else:
             if len(group[column].unique()) > 1:
-                outvals.append( filter(bool, group[column].unique()) )  # functional consequence and effect should only be 1 value as well, but may not be if there is a mixture of annotated and unannotated vcf files. 
-                                                                    # This sorts the effects and consequences, and only takes the first value as part of the output. This extracts the annotation and leaves the blank out of the output
+                outvals.append( "/".join(filter(bool, [x for x in group[column].unique() if x != '?' ] )) )  # functional consequence and effect should only be 1 value as well, but may not be if there is a mixture of annotated and unannotated vcf files. 
+                                                                    # This sorts the effects and consequences, and concatenates the values that are not '?'s.
                                                                     # each of the appended values must be an array in order to transform dictionary to pandas data frame in the next line
             else:
                 outvals.append( group[column].unique() )

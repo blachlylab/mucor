@@ -29,7 +29,7 @@ import argparse
 from collections import defaultdict
 import csv
 import json
-import pdb
+from pdb import set_trace as stop
 import codecs
 
 # mucor modules
@@ -53,10 +53,12 @@ def DetectMalformedColumns(fn):
         row = varReader.next()
     except StopIteration:
         throwWarning("Empty file: {0}".format(fn))
-        return true
+        return "Empty"
     while row[0].startswith('##'):
-        row = varReader.next()
-
+        try:
+            row = varReader.next()
+        except StopIteration:
+            return "Empty"
     if row[:9] != ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']:
         return True
     return False
@@ -68,6 +70,7 @@ def DetectDataType(fn):
     Only works with the expected formats, outlined below.
     Leverages the fact that most variant calling softwares output the name of the tool in every VCF header.
     '''
+    unknown = "Unknown" # what to return when the variant caller cannot be inferred from the header
     try:
         varFile = open(fn, 'r')
         varReader = csv.reader(varFile, delimiter='\t')
@@ -75,7 +78,7 @@ def DetectDataType(fn):
             row = varReader.next()
         except StopIteration:
             throwWarning("Empty file: {0}".format(fn))
-            return "Unknown"
+            return unknown
         while row[0].startswith('##'):
             if str('Torrent Unified Variant Caller') in str(row): 
                 return "IonTorrent"
@@ -108,8 +111,9 @@ def DetectDataType(fn):
                 return "GenericGATK"
                 break
             row = varReader.next()
+        return unknown
     except:
-        return "Unknown"
+        return unknown
 
 def DetectSnpEffStatus(fn):
     '''
@@ -264,7 +268,11 @@ def getJSONDict(args, proj_dir):
                             throwWarning(full_path)
                             print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
                         elif str(i).split('.')[-1] == str("vcf"):
-                            if DetectMalformedColumns(full_path):
+                            malformed = DetectMalformedColumns(full_path)
+                            if str(malformed) == "Empty":
+                                throwWarning("File contains no mutations: {0}".format(full_path))
+                                continue
+                            elif bool(malformed):
                                 throwWarning(full_path)
                                 print("File has malformed VCF column names and may not behave as expected in final outputs.")
                             tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
