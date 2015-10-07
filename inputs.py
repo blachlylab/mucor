@@ -31,12 +31,8 @@ class Parser(object):
 
     def __init__(self):
             self.row = ''
-            self.fieldId = ''
-            self.header = ''
-            self.fn = ''
-            self.eff = ''
-            self.fc = ''
             self.source = ''
+            self.var = None
 
             # Respective parse functions. 
             # Keys are identical to the allowed formats in mucor_config.py
@@ -52,41 +48,45 @@ class Parser(object):
                                         "FreeBayes":self.parse_FreeBayes,
                                         "GenericGATK":self.parse_GenericGATK }
 
-    def parse(self, source, row, fieldId, header, fn, effect, fc):
+    def old_parse(self, row, source):
         self.source = source
         self.row  = row
-        self.fieldId = fieldId
-        self.header = header
-        self.fn  = fn
-        self.eff  = effect
-        self.fc = fc
+        var = self.HTSeq_parse()
+        '''
         try:
             var = self.supported_formats[self.source]()
         except KeyError:
             throwWarning("File {0} cannot be parsed. No valid input module for source {1}".format(fn, source))
             return None
+        return var
+        '''
 
-        if source != "GATK":
-            return var
-        else:
+    def parse(self, row, source):
+        self.source = source
+        self.row  = row
+        chrom = row.chrom 
+        ref   = row.ref
+        alt   = "/".join(sorted(row.alt))
+        pos   = row.pos # already exists as GenomicPosition object
+        dp    = 0
+        frac  = 0.0
+        effect, fc = parse_EFC(row.info)
+        #self.var = Variant(source='', pos=pos, ref=ref, alt=alt, frac=frac, dp=dp, eff=effect, fc=fc)
+        #stop()
+        out = []
+        try:
+            samples_dict = self.supported_formats[self.source](row.samples)
+        except:
             stop()
-
-    def HTSeq_parse(self):
-        stop()
+        for sample, vals in samples_dict.items():
+            out.append(Variant(source='', sample=sample, pos=pos, ref=ref, alt=alt, frac=vals[1], dp=vals[0], eff=effect, fc=fc))
+        return out
 
     def parse_MiSeq(self):
         ''' MiSeq vcf parser function. Input: InputParser object. Output: Variant object '''
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        fc    = self.fc
-        effect   = self.eff
-        for i in row[fieldId['INFO']].split(';'):
+        for sample in self.row.samples:
+
             if i.startswith("DP="):
                 dp = i.split('=')[1]
 
@@ -282,9 +282,29 @@ class Parser(object):
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
 
-    def parse_HapCaller(self):
+    def parse_HapCaller(self, samples):
         ''' GATK haplotype caller vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            try:
+                dp = int(values['DP'])
+                ad = str(values['AD'])
+                if str(',') in ad:
+                    ref_count = int(ad.split(',')[0])
+                    alt_count = int(ad.split(',')[1])
+                    try:
+                        vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
+                    except:
+                        vf=0.0
+                else:
+                    abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
+            except:
+                throwWarning("Cannot parse Haplotype Caller output: insufficient fields. " + ", ".join([str(x) for x in values.keys()]))
+                vf = 0.0
+                dp = 0
+            out[sample] = (dp,vf)
 
+        '''
         row = self.row
         fieldId = self.fieldId
         header = self.header
@@ -296,13 +316,6 @@ class Parser(object):
         fc = self.fc
         j = 0
         position = int(row[fieldId['POS']])
-        '''
-        for i in row[fieldId['INFO']].split(';'):
-            if i.startswith("DP="):
-                dp = i.split('=')[1]
-            if i.startswith("AF="):
-                vf1 = float(i.split('=')[1])
-        '''
         for i in row[fieldId['FORMAT']].split(':'):
             if str(i) == "DP":
                 dp = int(row[fieldId[header[-1]]].split(':')[j])
@@ -330,36 +343,19 @@ class Parser(object):
             dp = 0.0
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
+        '''
+        return out
 
-    def parse_FreeBayes(self):
+    def parse_FreeBayes(self, samples):
         ''' freebayes vcf parser function. Input: InputParser object. Output: Variant object '''
-
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        position = int(row[fieldId['POS']])
-        if set(row[fieldId[header[-1]]].split(':')) == set(['.']):
-            # the sample data column is composed exclusively of period (missing data)
-            # skip this mutation in this sample
-            return False
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "DP":
-                dp = int(row[fieldId[header[-1]]].split(':')[j])
-            if str(i) == "RO":
-                ro = int( str(row[fieldId[header[-1]]].split(':')[j]) )
-            if str(i) == "AO":
-                ao = int(  sum([ int(x) for x in str(row[fieldId[header[-1]]].split(':')[j]).split(',')]) )
-            j += 1
-        vf = float( float(ao)/float(ao + ro) )
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = int(values['DP'])
+            ro = int(values['RO'])
+            ao = sum([int(x) for x in values['AO'].split(',')])
+            vf = float( float(ao)/float(ao + ro) )
+            out[sample] = (dp, vf) 
+        return out
 
     def parse_GenericGATK(self):
         ''' 
@@ -415,3 +411,27 @@ class Parser(object):
             alt = ""   
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
+
+def parse_EFC(INFO):
+    # attempt to extract 'effect' and 'functional consequence' from the VCF line
+    effect = ""
+    fc = ""
+    muts = []
+    loca = []
+    try:
+        for eff in INFO.split(';'):
+            if eff.startswith('EFF='):
+                for j in eff.split(','):
+                    muts.append(str(j.split('|')[3]))
+                    loca.append(str(j.split('(')[0]).replace('EFF=',''))
+        # reformat the lists to exclude blanks and be semicolon delimited
+        for mut in set(muts):
+            if str(mut) != "":
+                effect += str(mut) + ";"
+        for loc in set(loca):
+            if str(loc) != "":
+                fc += str(loc) + ";"
+    except KeyError:
+        # this VCF may not be snpEff annotated
+        pass
+    return effect.strip(';'), fc.strip(';')
