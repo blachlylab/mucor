@@ -363,6 +363,60 @@ def annotateDF(grp, databases):
         grp.insert(len(grp.columns)-4, source + "_VAF", dbVAFs[source])
     return grp
 
+def integrateVar(var, varD, config, gas, knownFeatures):
+    '''
+    Ingest the given variant object into the variant dictionary 
+    '''
+    # find bin for variant location
+    try:
+        resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
+    except KeyError:                    # which I'll use as a key on the knownFeatures dict
+                                        # and each feature with matching ID gets allocated the variant
+        # this mutation is on a contig unknown to the GAS
+        resultSet = set()
+        unrecognizedContigs.add(var.pos.chrom)
+        unrecognizedMutations += 1
+   
+    if resultSet:
+        for featureName in resultSet:
+            kvar = skipThisIndel(var, knownFeatures, featureName)
+            if bool(kvar):
+                # Sanity check to see what indels are being overwritten by existing vars
+                var.ref = kvar[0]
+                var.alt = kvar[1]
+            
+            knownFeatures[featureName].variants.add(var)
+    
+    # Descriptive variable names
+    chr = var.pos.chrom
+    pos = int(var.pos.pos)
+    ref = var.ref
+    alt = var.alt 
+    vf = var.frac
+    dp = var.dp
+    features = ', '.join( resultSet )   # join with comma to handle overlapping features
+    effect = var.eff
+    fc = var.fc
+    sample = var.sample
+    source = var.source
+    count = 0 # initialize this database column now to save for later
+    freq = 0.0 # initialize this database column now to save for later
+    
+    # build dict to insert
+    # Step 1: define the columns and their values
+    # Step 2. zip the column names and column values together into a dictionary
+    # Step 3. Add this round to the master variants data frame dictinoary
+
+    for feature in features.split(', '):
+        # Removing columns from the following 'columns' list will mask them from output
+        columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
+        values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
+
+        vardata = dict(zip( columns, values ))
+        for key in vardata.keys():
+            varD[key].append(vardata[key])
+    return varD
+
 def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
     '''
     Read in all input files
@@ -406,77 +460,110 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             throwWarning('{} could not be opened'.format(fn))
             continue    # next fn in variantFiles
 
-        # start htseq vcf reader
-        varReader = HTSeq.VCF_Reader(str(fn))
-        varReader.parse_meta()
-        varReader.make_info_dict()
-        for row in varReader:
-            if row.filter not in filters:
-                continue
-            parser = inputs.Parser()
-            source = config.source[ os.path.basename(fn) ]
-            if regions and not inRegionDict(row.pos.chrom, int(row.pos.pos), int(row.pos.pos), regionDict ):
-                continue
-            samps = parser.parse(row, source)
-            for var in samps:
+        if kind == "out":
+            # parse as mutect '.out' type format
+            varReader = csv.reader(varFile, delimiter="\t")
+            row = varReader.next()
+            while row[0].startswith('##'):
+                row = varReader.next()
+            header = row
+            if len(header) == 0: raise ValueError('Invalid header')
+            fieldId = dict(zip(header, range(0, len(header))))
+            for row in itertools.islice(varReader, None):
+                
+                if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
+                    continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
+                source = config.source[fn.split('/')[-1]]
+                parser = inputs.Parser()
+                parser.row = row
+                parser.source = source
+                parser.fieldId = fieldId
+                parser.header = header
+                parser.fn = fn 
+                var = parser.parse_MuTectOUT()
+                var.sample = config.filename2samples[os.path.basename(fn)]
                 if not var:
                     # this mutation had no data in this sample
                     continue
-                var.source = os.path.basename(fn)
-                # find bin for variant location
-                try:
-                    resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-                except KeyError:                    # which I'll use as a key on the knownFeatures dict
-                                                    # and each feature with matching ID gets allocated the variant
-                    # this mutation is on a contig unknown to the GAS
-                    resultSet = set()
-                    unrecognizedContigs.add(var.pos.chrom)
-                    unrecognizedMutations += 1
-               
-                if resultSet:
-                    for featureName in resultSet:
-                        kvar = skipThisIndel(var, knownFeatures, featureName)
-                        if bool(kvar):
-                            # Sanity check to see what indels are being overwritten by existing vars
-                            var.ref = kvar[0]
-                            var.alt = kvar[1]
-                        
-                        knownFeatures[featureName].variants.add(var)
-                
-                # Descriptive variable names
-                chr = var.pos.chrom
-                pos = int(var.pos.pos)
-                ref = var.ref
-                alt = var.alt 
-                vf = var.frac
-                dp = var.dp
-                features = ', '.join( resultSet )   # join with comma to handle overlapping features
-                effect = var.eff
-                fc = var.fc
-                
-                if len(samps) == 1:
-                    # if not multi-sample VCF, pull sample ID from the json config
-                    sample = config.filename2samples[str(fn.split('/')[-1])]
-                elif len(samps) > 1:
-                    # if multi-sample VCF, use sample ID as defined by the VCF rather than the config
-                    sample = var.sample
-                source = os.path.split(fn)[1]
-                count = 0 # initialize this database column now to save for later
-                freq = 0.0 # initialize this database column now to save for later
-                
-                # build dict to insert
-                # Step 1: define the columns and their values
-                # Step 2. zip the column names and column values together into a dictionary
-                # Step 3. Add this round to the master variants data frame dictinoary
+                if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
+                    continue
+                varD = integrateVar(var, varD, config, gas, knownFeatures)
 
-                for feature in features.split(', '):
-                    # Removing columns from the following 'columns' list will mask them from output
-                    columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
-                    values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
+        elif kind == "vcf":
+            # start htseq vcf reader
+            varReader = HTSeq.VCF_Reader(str(fn))
+            varReader.parse_meta()
+            varReader.make_info_dict()
+            for row in varReader:
+                if row.filter not in filters:
+                    continue
+                if regions and not inRegionDict(row.pos.chrom, int(row.pos.pos), int(row.pos.pos), regionDict ):
+                    continue
+                parser = inputs.Parser()
+                source = config.source[ os.path.basename(fn) ]
+                samps = parser.parse(row, source)
+                for var in samps:
+                    if not var:
+                        # this mutation had no data in this sample
+                        continue
+                    var.source = os.path.basename(fn)
+                    if len(samps) == 1:
+                        # if not multi-sample VCF, pull sample ID from the json config
+                        var.sample = config.filename2samples[str(fn.split('/')[-1])]
+                    elif len(samps) > 1:
+                        # if multi-sample VCF, use sample ID as defined by the VCF column(s) rather than the config
+                        pass
+                    varD = integrateVar(var, varD, config, gas, knownFeatures)
 
-                    vardata = dict(zip( columns, values ))
-                    for key in vardata.keys():
-                        varD[key].append(vardata[key])
+                    '''
+                    # find bin for variant location
+                    try:
+                        resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
+                    except KeyError:                    # which I'll use as a key on the knownFeatures dict
+                                                        # and each feature with matching ID gets allocated the variant
+                        # this mutation is on a contig unknown to the GAS
+                        resultSet = set()
+                        unrecognizedContigs.add(var.pos.chrom)
+                        unrecognizedMutations += 1
+                   
+                    if resultSet:
+                        for featureName in resultSet:
+                            kvar = skipThisIndel(var, knownFeatures, featureName)
+                            if bool(kvar):
+                                # Sanity check to see what indels are being overwritten by existing vars
+                                var.ref = kvar[0]
+                                var.alt = kvar[1]
+                            
+                            knownFeatures[featureName].variants.add(var)
+                    
+                    # Descriptive variable names
+                    chr = var.pos.chrom
+                    pos = int(var.pos.pos)
+                    ref = var.ref
+                    alt = var.alt 
+                    vf = var.frac
+                    dp = var.dp
+                    features = ', '.join( resultSet )   # join with comma to handle overlapping features
+                    effect = var.eff
+                    fc = var.fc
+                    source = os.path.split(fn)[1]
+                    count = 0 # initialize this database column now to save for later
+                    freq = 0.0 # initialize this database column now to save for later
+                    
+                    # build dict to insert
+                    # Step 1: define the columns and their values
+                    # Step 2. zip the column names and column values together into a dictionary
+                    # Step 3. Add this round to the master variants data frame dictinoary
+
+                    for feature in features.split(', '):
+                        # Removing columns from the following 'columns' list will mask them from output
+                        columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
+                        values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
+
+                        vardata = dict(zip( columns, values ))
+                        for key in vardata.keys():
+                            varD[key].append(vardata[key])
+                    '''
 
 
 
@@ -598,7 +685,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
- 
+    
+    columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
     # Transform data frame dictionary into pandas DF. Major speed increase compared to appending variants to the DF while reading the input files. 
     try:
         varDF = pd.DataFrame(varD, columns=columns)
