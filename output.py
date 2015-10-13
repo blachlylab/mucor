@@ -138,7 +138,7 @@ class Writer(object):
         numHits = grouped['sample'].count()
         numHits.name = 'Hits'
         numHits = pd.DataFrame(numHits)
-
+        
         weightedHits = grouped['vf'].apply(np.sum)
         weightedHits.name = 'WeightedHits'
         weightedHits = pd.DataFrame(weightedHits)

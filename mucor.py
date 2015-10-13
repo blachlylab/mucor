@@ -690,13 +690,19 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     # Transform data frame dictionary into pandas DF. Major speed increase compared to appending variants to the DF while reading the input files. 
     try:
         varDF = pd.DataFrame(varD, columns=columns)
+        # Drop samples with no detected mutation at the given loc
+        varDF = varDF.dropna(subset=['dp','vf'], how='all')
+        # Cast dp and vf as appropriate types
+        varDF['dp'] = varDF['dp'].astype(int)
+        varDF['vf'] = varDF['vf'].astype(float)
     except UnboundLocalError:
         if not varD:            
             # variant dictionary is empty, implying no variants were encountered and kept
-            abortWithMessage("Variant DataFrame is empty! No mutations passed filter")
+            abortWithMessage("Variant DataFrame is empty! No mutations passed filter; check FILTER column of input VCF against allowed filters in JSON config.")
         else:
             abortWithMessage("Could not convert Variant Dictionary into a DataFrame")
-
+    if len(varDF) == 0:
+        abortWithMessage("Variant DataFrame is empty! No mutations passed filter; check FILTER column of input VCF against allowed filters in JSON config.")
     # Annotate dataframe using user-supplied vcf databases
     if databases:
         print("\n=== Comparing Your Variants to Known VCF Databases ===")

@@ -89,8 +89,8 @@ class Parser(object):
         ''' MiSeq vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            vf = 0.0
-            dp = 0
+            vf = None
+            dp = None 
             if 'VF' in values.keys():
                 vf = float(values['VF'])
             if 'DP' in values.keys():
@@ -106,18 +106,23 @@ class Parser(object):
             if not vf and 'AD' in values.keys():
                 # try to calculate vaf from AD column
                 vf = float(ad)/float(ad + rd)
-            out[sample] = (int(dp), float(vf)) 
+            out[sample] = (dp, vf) 
         return out
 
     def parse_IonTorrent(self, samples):
         ''' Ion Torrent vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            ao = sum( [int(x) for x in values['AO'].split(',')] )
-            ro = int(values['RO'])
-            dp = int(values['DP'])
-            vf = float(ao)/float(dp)
-            out[sample] = (int(dp), float(vf)) 
+            dp = None 
+            vf = None 
+            try:
+                ao = sum( [int(x) for x in values['AO'].split(',')] )
+                ro = int(values['RO'])
+                dp = int(values['DP'])
+                vf = float(ao)/float(dp)
+            except:
+                pass
+            out[sample] = (dp, vf) 
         return out
 
     def parse_MuTectOUT(self):
@@ -143,12 +148,17 @@ class Parser(object):
         ''' MuTect vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
+            dp = None
+            vf = None 
             # remove empty sample columns
             if sample == "none" and values['DP'] == '0' and values['BQ'] == '.':
                 continue
-            dp = values['DP']
-            vf = values['FA']
-            out[sample] = (int(dp), float(vf)) 
+            try:
+                dp = values['DP']
+                vf = values['FA']
+            except:
+                pass
+            out[sample] = (dp, vf) 
         return out
 
     def parse_SomaticIndelDetector(self, samples):
@@ -156,10 +166,15 @@ class Parser(object):
         ''' GATK SomaticIndelDetector vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            dp = int(values['DP'])
-            ad = int(values['AD'].split(',')[1])
-            vf = float(ad)/float(dp)
-            out[sample] = (int(dp), float(vf)) 
+            dp = None
+            vf = None 
+            try:
+                dp = int(values['DP'])
+                ad = int(values['AD'].split(',')[1])
+                vf = float(ad)/float(dp)
+            except:
+                pass
+            out[sample] = (dp, vf) 
         return out
 
         '''
@@ -195,8 +210,8 @@ class Parser(object):
         ''' samtools vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            dp = 0
-            vf = 0.0
+            dp = None
+            vf = None 
             if 'DP4' in values.keys():
                 dp4 = values['DP4'].split(',')
                 ro = int(dp4[0]) + int(dp4[1])
@@ -208,22 +223,29 @@ class Parser(object):
                 if 'DP' in values.keys():
                     dp = int(values['DP'])
 
-            out[sample] = (int(dp), float(vf)) 
+            out[sample] = (dp, vf) 
         return out
 
     def parse_VarScan(self,samples):
         ''' varscan vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            dp = int(values['DP'])
-            vf = float(values['FREQ'].strip('%'))/100.0
-            out[sample] = (int(dp), float(vf)) 
+            dp = None
+            vf = None 
+            try:
+                dp = int(values['DP'])
+                vf = float(values['FREQ'].strip('%'))/100.0
+            except:
+                pass
+            out[sample] = (dp, vf) 
         return out
 
     def parse_HapCaller(self, samples):
         ''' GATK haplotype caller vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
+            vf = None
+            dp = None 
             try:
                 dp = int(values['DP'])
                 ad = str(values['AD'])
@@ -238,20 +260,23 @@ class Parser(object):
                     abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
             except:
                 throwWarning("Cannot parse Haplotype Caller output: insufficient fields. " + ", ".join([str(x) for x in values.keys()]))
-                vf = 0.0
-                dp = 0
-            out[sample] = (dp,vf)
+            out[sample] = (dp, vf)
         return out
 
     def parse_FreeBayes(self, samples):
         ''' freebayes vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
-            dp = int(values['DP'])
-            ro = int(values['RO'])
-            ao = sum([int(x) for x in values['AO'].split(',')])
-            vf = float( float(ao)/float(ao + ro) )
-            out[sample] = (int(dp), float(vf)) 
+            dp = None
+            vf = None
+            try:
+                dp = int(values['DP'])
+                ro = int(values['RO'])
+                ao = sum([int(x) for x in values['AO'].split(',')])
+                vf = float( float(ao)/float(ao + ro) )
+            except:
+                pass
+            out[sample] = (dp, vf) 
         return out
 
     def parse_GenericGATK(self, samples):
@@ -261,8 +286,8 @@ class Parser(object):
         '''
         out = {}
         for sample, values in samples.items():
-            dp = 0
-            vf = 0.0
+            dp = None
+            vf = None
             if 'DP' in values.keys():
                 #DP is defined 
                 dp = values['DP']
@@ -283,7 +308,7 @@ class Parser(object):
                     if not vf:
                         throwWarning("Could not determine variant allele frequency for {0} using GenericGATK parser".format(sample))
                     pass
-            out[sample] = (int(dp), float(vf)) 
+            out[sample] = (dp, vf) 
         return out
 
     def parse_MAF(self):

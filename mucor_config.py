@@ -33,6 +33,7 @@ from pdb import set_trace as stop
 import codecs
 
 # mucor modules
+from inputs import Parser 
 from config import Config
 import output
 
@@ -267,6 +268,7 @@ def getJSONDict(args, proj_dir):
                         if source == "Unknown" and str(i).split('.')[-1] == str("vcf"):
                             throwWarning(full_path)
                             print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
+                            print("Options include: " + str(Parser().supported_formats.keys()).replace("'",""))
                         elif str(i).split('.')[-1] == str("vcf"):
                             malformed = DetectMalformedColumns(full_path)
                             if str(malformed) == "Empty":
