@@ -51,19 +51,6 @@ class Parser(object):
                                         "FreeBayes":self.parse_FreeBayes,
                                         "GenericGATK":self.parse_GenericGATK }
 
-    def old_parse(self, row, source):
-        self.source = source
-        self.row  = row
-        var = self.HTSeq_parse()
-        '''
-        try:
-            var = self.supported_formats[self.source]()
-        except KeyError:
-            throwWarning("File {0} cannot be parsed. No valid input module for source {1}".format(fn, source))
-            return None
-        return var
-        '''
-
     def parse(self, row, source):
         self.source = source
         self.row  = row
@@ -74,13 +61,8 @@ class Parser(object):
         dp    = 0
         frac  = 0.0
         effect, fc = parse_EFC(row.info)
-        #self.var = Variant(source='', pos=pos, ref=ref, alt=alt, frac=frac, dp=dp, eff=effect, fc=fc)
-        #stop()
         out = []
-        try:
-            samples_dict = self.supported_formats[self.source](row.samples)
-        except:
-            stop()
+        samples_dict = self.supported_formats[self.source](row.samples)
         for sample, vals in samples_dict.items():
             out.append(Variant(source='', sample=sample, pos=pos, ref=ref, alt=alt, frac=vals[1], dp=vals[0], eff=effect, fc=fc))
         return out
@@ -162,7 +144,7 @@ class Parser(object):
         return out
 
     def parse_SomaticIndelDetector(self, samples):
-        ''' DEPRECIATED '''
+        ''' DEPRECIATED AND UNTESTED '''
         ''' GATK SomaticIndelDetector vcf parser function. Input: InputParser object. Output: Variant object '''
         out = {} # list of variant objects; 1 per sample
         for sample, values in samples.items():
@@ -312,7 +294,7 @@ class Parser(object):
         return out
 
     def parse_MAF(self):
-        ''' DEPRECIATED '''
+        ''' DEPRECIATED AND UNTESTED'''
         ''' maf filetype parser function. Input: InputParser object. Output: Variant object '''
 
         row = self.row

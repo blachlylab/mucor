@@ -25,12 +25,14 @@
 
 import os
 import sys
+import re
 import argparse
 from collections import defaultdict
 import csv
 import json
 from pdb import set_trace as stop
 import codecs
+import HTSeq
 
 # mucor modules
 from inputs import Parser 
@@ -54,12 +56,12 @@ def DetectMalformedColumns(fn):
         row = varReader.next()
     except StopIteration:
         throwWarning("Empty file: {0}".format(fn))
-        return "Empty"
+        return True
     while row[0].startswith('##'):
         try:
             row = varReader.next()
         except StopIteration:
-            return "Empty"
+            return True
     if row[:9] != ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT']:
         return True
     return False
@@ -71,7 +73,7 @@ def DetectDataType(fn):
     Only works with the expected formats, outlined below.
     Leverages the fact that most variant calling softwares output the name of the tool in every VCF header.
     '''
-    unknown = "Unknown" # what to return when the variant caller cannot be inferred from the header
+    unknown_data_type_name = "Unknown" # what to return when the variant caller cannot be inferred from the header
     try:
         varFile = open(fn, 'r')
         varReader = csv.reader(varFile, delimiter='\t')
@@ -79,7 +81,7 @@ def DetectDataType(fn):
             row = varReader.next()
         except StopIteration:
             throwWarning("Empty file: {0}".format(fn))
-            return unknown
+            return unknown_data_type_name
         while row[0].startswith('##'):
             if str('Torrent Unified Variant Caller') in str(row): 
                 return "IonTorrent"
@@ -112,9 +114,9 @@ def DetectDataType(fn):
                 return "GenericGATK"
                 break
             row = varReader.next()
-        return unknown
+        return unknown_data_type_name
     except:
-        return unknown
+        return unknown_data_type_name
 
 def DetectSnpEffStatus(fn):
     '''
@@ -190,31 +192,61 @@ def blankJSONDict():
         json_dict['samples'].append(tmpSampleDict)
     return json_dict
 
+def processFile(full_path, tmpSampleDict):
+    source = DetectDataType(full_path)
+    if source == "Unknown" and str(full_path).split('.')[-1] == str("vcf"):
+        throwWarning(full_path)
+        print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
+        print("Options include: " + str(Parser().supported_formats.keys()).replace("'",""))
+    elif str(full_path).split('.')[-1] == str("vcf"):
+        if DetectMalformedColumns(full_path):
+            throwWarning(full_path)
+            print("Malformed or empty VCF file: {0}".format(full_path))
+        tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
+    elif str(full_path).split('.')[-1] == str("out"):
+        tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+    elif str(full_path).split('.')[-1] == str("bam"):
+        try:
+            tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
+            # tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
+        except:
+            tmpSampleDict['files'] = list()
+            tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
+# Not sure if these still work 
+    elif str(full_path).split('.')[-1].lower() == str("maf"):
+        tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
+    elif str(full_path).split('.')[-1].lower() == str("gvf"):
+        tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
+    else:
+        # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
+        # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
+        pass 
+    return tmpSampleDict           
 
-def getJSONDict(args, proj_dir):
+def getJSONDict(args):
     '''
     Create the JSON dictionary. JSON dict keys are identical to the Config class in config.py. 
     Converts the user input args from argparse into a dictionary
     '''
     json_dict = defaultdict()
-    json_dict['outputDir'] = str(args.output_directory).split('/')[-1]
-    json_dict['gff'] = str(args.gff)
-    json_dict['union'] = bool(args.union)
-    json_dict['fast'] = args.archive_directory
-    json_dict['feature'] = str(args.featuretype)
+    json_dict['outputDir'] = str(args['output_directory']).split('/')[-1]
+    json_dict['gff'] = str(args['gff'])
+    json_dict['union'] = bool(args['union'])
+    json_dict['fast'] = args['archive_directory']
+    json_dict['feature'] = str(args['featuretype'])
     json_dict['samples'] = list(dict())
 
     # VCF filters
     outFilters = set(["PASS"]) # By default, all mutations marked as PASS are permitted
-    for i in str(args.vcf_filters).split(','):
+    for i in str(args['vcf_filters']).split(','):
         if i:
             outFilters.add(i) # Add all user-defined vcf filters. VCFs with empty 'FILTER' columns must have '.' supplied here, or all mutations will be filtered out
     json_dict['filters'] = [x for x in outFilters] # finally, convert set to list
 
     # Genomic regions
     json_dict['regions'] = []
-    if args.regions: # user has defined regions to focus on
-        for i in str(args.regions).split(','):
+    if args['regions']: # user has defined regions to focus on
+        for i in str(args['regions']).split(','):
             if str(i.split('.')[-1]).lower() == "bed":
                 # this is a bed file of regions
                 # it will be parsed in the main python script
@@ -237,7 +269,7 @@ def getJSONDict(args, proj_dir):
 
     # Variant databases 
     json_dict['databases'] = defaultdict(str)
-    for i in args.databases:
+    for i in args['databases']:
         source_name = i.split(':')[0]
         source_path = i.split(':')[1]
         if bool(json_dict['databases'][source_name]):
@@ -246,56 +278,48 @@ def getJSONDict(args, proj_dir):
 
     # Output formats
     json_dict['outputFormats'] = []
-    for i in str(args.output_type).split(','):
+    for i in str(args['output_type']).split(','):
         json_dict['outputFormats'].append(str(i)) #.lower() was here for some reason
 
     # Samples and associated variant files
-    for id in open(args.samples):
+    samples = [] 
+    for id in open(args['samples']):
         sid = id.strip()
         if str(sid) == "":
             continue
         else:
             # sample name is not blank line
-            # walk over the input project directory (or CWD if none defined) to find all files with sample ID in the name
-            tmpSampleDict = defaultdict()
-            tmpSampleDict['id'] = str(sid)
-            tmpSampleDict['files'] = list()
-            for root, dirs, files in os.walk(proj_dir):
+            samples.append(sid)
+
+    for sid in samples:
+        # walk over the input project directory (or CWD if none defined) to find all files with sample ID in the name
+        tmpSampleDict = defaultdict()
+        tmpSampleDict['id'] = str(sid)
+        tmpSampleDict['files'] = list()
+        # directory crawl searching for sample name in the file name/path
+        if args['project_directory']:
+            for root, dirs, files in os.walk(args['project_directory']):
                 for i in files:
-                    if str(sid) in str(i): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
-                        full_path = os.path.join(root, i)
-                        source = DetectDataType(full_path)
-                        if source == "Unknown" and str(i).split('.')[-1] == str("vcf"):
-                            throwWarning(full_path)
-                            print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
-                            print("Options include: " + str(Parser().supported_formats.keys()).replace("'",""))
-                        elif str(i).split('.')[-1] == str("vcf"):
-                            malformed = DetectMalformedColumns(full_path)
-                            if str(malformed) == "Empty":
-                                throwWarning("File contains no mutations: {0}".format(full_path))
-                                continue
-                            elif bool(malformed):
-                                throwWarning(full_path)
-                                print("File has malformed VCF column names and may not behave as expected in final outputs.")
-                            tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
-                        elif str(i).split('.')[-1] == str("out"):
-                            tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
-                        elif str(i).split('.')[-1] == str("bam"):
-                            try:
-                                tmpSampleDict['bam'].append({'path':str(full_path)} )
-                            except:
-                                tmpSampleDict['bam'] = list()
-                                tmpSampleDict['bam'].append({'path':str(full_path)} )
-                    # Not sure if these still work 
-                        elif str(i).split('.')[-1].lower() == str("maf"):
-                            tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
-                        elif str(i).split('.')[-1].lower() == str("gvf"):
-                            tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
-                        else:
-                            # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
-                            # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
-                            pass            
+                    if re.search(r"\b" + re.escape(sid) + r"\b", i): 
+                    # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
+                        full_path = os.path.abspath(os.path.join(root, i))
+                        tmpSampleDict = processFile(full_path, tmpSampleDict) 
+            #json_dict['samples'].append(tmpSampleDict)
+        # if files were passed via --inputs
+        if args['inputs']:
+            for fn in args['inputs']:
+                full_path = os.path.abspath(fn)
+                if str(fn).split('.')[-1] == str("bam"):
+                    if re.search(r"\b" + re.escape(sid) + r"\b", fn):
+                        tmpSampleDict = processFile(full_path, tmpSampleDict)
+                varReader = HTSeq.VCF_Reader(str(fn))
+                varReader.parse_meta() # extract list of sample names in VCF header
+                if sid in set(varReader.sampleids): 
+                    tmpSampleDict = processFile(full_path, tmpSampleDict)
+        # uniquify the list of files associated with the sample, in case they were supplied directly via (-i) and found while directory crawling (-d)
+        tmpSampleDict['files'] =  { v['path']:v for v in tmpSampleDict['files']}.values()
         json_dict['samples'].append(tmpSampleDict)
+    
     return json_dict
 
 def inconsistentFilesPerSample(json_dict):
@@ -331,10 +355,11 @@ def main():
     parser.add_argument("-f", "--featuretype", required=True, help="Feature type into which to bin. Gencode GTF example: gene_name, gene_id, transcript_name, transcript_id, etc. ")
     parser.add_argument("-db", "--database", dest='databases', metavar='<dbName:/path/database.vcf.gz>', default=[], action='append', help="Colon delimited name and path to variant database in bgzipped VCF format. Can be declared >= 0 times.")
     parser.add_argument("-s", "--samples", metavar='<sample_list.txt>', required=True, help="Text file containing sample names. One sample per line.")
-    parser.add_argument("-d", "--project_directory", metavar='<dirname>', required=False, help="Working/project directory, in which to find input variant call files. Default: current working directory")
+    parser.add_argument("-d", "--project_directory", metavar='<dirname>', required=False, help="Working/project directory, in which to find input variant call files.")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow. Default: PASS") # the defualt value is applied later on in the getJSONDict function, not here.
     parser.add_argument("-a", "--archive_directory", default="", help="Specify directory in which to read/write archived annotations. Undeclared will prevent using the annotation archive features.")
     parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
+    parser.add_argument("-i", "--inputs", nargs="+", help="Input files")
     parser.add_argument("-u", "--union", action="store_true", help="""
         Join all items with same ID for feature_type (specified by -f)
         into a single, continuous bin. For example, if you want intronic
@@ -346,49 +371,56 @@ def main():
     parser.add_argument("-jco", "--json_config_output", required=True, help="Name of JSON configuration output file")   
     parser.add_argument("-outd", "--output_directory", required=True, help="Name of directory in which to write Mucor output")
     parser.add_argument("-outt", "--output_type", default="default", help=str("Comma separated list of desired output types. Options include: " + str(output.Writer().supported_formats.keys()).replace("'","") + ". Default: counts,txt"))
-    args = parser.parse_args()
-
+    args = vars(parser.parse_args()) # convert the argparser.Namespace to a dictionary, so values can be overwritten 
+    
     # Verify user inputs
+    # Is there a project directory defined? If so, does it exist?
+    if args['project_directory'] and not os.path.exists(args['project_directory']):
+        throwWarning("Supplied project directory does not exist: {0}".format(args['project_directory']))
+        args['project_directory'] = None
+    # Do the intput files exist?
+    if args['inputs']:
+        for fn in args['inputs']:
+            if not os.path.exists(fn):
+                throwWarning("Supplied file does not exist: {0}".format(fn))
+                # remove this file from inputs
+                args['inputs'] = [x for x in args['inputs'] if str(x) != str(fn)]
+    # Did the user supply at least 1 valid input file or project directory?
+    if not args['project_directory'] and not args['inputs']:
+        abortWithMessage("Must supply a valid input file(s) (-i) and/or project directory (-d)")
     # Does the gtf exist?
-    if not os.path.exists(args.gff):
-        abortWithMessage("Could not find GFF file {0}".format(args.gff))
+    if not os.path.exists(args['gff']):
+        abortWithMessage("Could not find GFF file {0}".format(args['gff']))
 
     # Do the database VCFs exist, and are they named properly?
-    if args.databases:
-        for db in args.databases:
+    if args['databases']:
+        for db in args['databases']:
             try:
                 if not os.path.exists(os.path.expanduser(db.split(':')[1])):
                     abortWithMessage("Could not find SNV DB file {0}".format(db.split(':')[1]))
             except IndexError: # user did not give a name and path, separated by colon
                 abortWithMessage("Cannot process {0}\n\tDatabase input must be colon delimited as, 'database_name:database_path'".format(db))
 
-    # Is there a project directory defined? If not, use current working directory
-    if not args.project_directory or not os.path.exists(args.project_directory):
-        print("Project directory not found; using CWD")
-        proj_dir = os.getcwd()
-    else:
-        proj_dir = args.project_directory
-
     # Will this output overwrite an existing JSON config file?
-    if os.path.exists(args.json_config_output):
-        abortWithMessage("JSON config file {0} already exists.".format(args.json_config_output))
+    if os.path.exists(args['json_config_output']):
+        abortWithMessage("JSON config file {0} already exists.".format(args['json_config_output']))
 
     # Does the given output directory exist and contain output already?
-    if os.path.exists(args.output_directory) and [x for x in os.listdir(args.output_directory) if x in output.Writer().file_names.values() ]:
-        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args.output_directory))
-    elif not os.path.exists(args.output_directory):
+    if os.path.exists(args['output_directory']) and [x for x in os.listdir(args['output_directory']) if x in output.Writer().file_names.values() ]:
+        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(args['output_directory']))
+    elif not os.path.exists(args['output_directory']):
         # If it does not exist, is the parent directory writable?
-        if not os.access( os.path.split( os.path.abspath(args.output_directory) )[0], os.W_OK):
-            abortWithMessage("Output directory {0} not writable".format(args.output_directory))
+        if not os.access( os.path.split( os.path.abspath(args['output_directory']) )[0], os.W_OK):
+            abortWithMessage("Output directory {0} not writable".format(args['output_directory']))
 
     # Construct JSON dictionary and dump it to the config file
-    json_dict = getJSONDict(args, proj_dir)
+    json_dict = getJSONDict(args)
     if inconsistentFilesPerSample(json_dict):
         throwWarning("Inconsistent number of files per sample")
         print("File #\tSample ID")
         for sample in json_dict['samples']:
             print( str(len(sample['files'])) + "\t" + str(sample['id']) )  
-    output_file = codecs.open(args.json_config_output, "w", encoding="utf-8")
+    output_file = codecs.open(args['json_config_output'], "w", encoding="utf-8")
     json.dump(json_dict, output_file, sort_keys=True, indent=4, ensure_ascii=True)
     print
 

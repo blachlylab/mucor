@@ -168,6 +168,9 @@ def parseJSON(json_config):
     for i in JD['samples']:
         config.samples.append(i['id'])
         for j in i['files']:
+            if j['type'] == "bam":
+                # skip the bam files
+                continue
             filename = str(j['path']).split('/')[-1]
             config.filename2samples[filename] = i['id']
             config.source[filename] = j['source']
@@ -433,7 +436,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     # However, it is MUCH faster to initially store them in a python Dict
     # Then convert to the pandas DF at the end
     varD = defaultdict(list) 
-    variantFiles = list(config.inputFiles)
+    variantFiles = set(list(config.inputFiles)) # uniquify the file list, in the case of the same multi-sample VCF being defined for multiple samples
 
     if regions: # has the user specified any particular regions or region files to focus on?
         regionDict = defaultdict(set)
@@ -503,8 +506,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 source = config.source[ os.path.basename(fn) ]
                 samps = parser.parse(row, source)
                 for var in samps:
-                    if not var:
-                        # this mutation had no data in this sample
+                    if not var or var.sample not in config.samples:
+                        # this sample has no mutation data at the given location, or this sample was not specified as a sample of interest in the JSON config 
                         continue
                     var.source = os.path.basename(fn)
                     if len(samps) == 1:
@@ -514,172 +517,6 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                         # if multi-sample VCF, use sample ID as defined by the VCF column(s) rather than the config
                         pass
                     varD = integrateVar(var, varD, config, gas, knownFeatures)
-
-                    '''
-                    # find bin for variant location
-                    try:
-                        resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-                    except KeyError:                    # which I'll use as a key on the knownFeatures dict
-                                                        # and each feature with matching ID gets allocated the variant
-                        # this mutation is on a contig unknown to the GAS
-                        resultSet = set()
-                        unrecognizedContigs.add(var.pos.chrom)
-                        unrecognizedMutations += 1
-                   
-                    if resultSet:
-                        for featureName in resultSet:
-                            kvar = skipThisIndel(var, knownFeatures, featureName)
-                            if bool(kvar):
-                                # Sanity check to see what indels are being overwritten by existing vars
-                                var.ref = kvar[0]
-                                var.alt = kvar[1]
-                            
-                            knownFeatures[featureName].variants.add(var)
-                    
-                    # Descriptive variable names
-                    chr = var.pos.chrom
-                    pos = int(var.pos.pos)
-                    ref = var.ref
-                    alt = var.alt 
-                    vf = var.frac
-                    dp = var.dp
-                    features = ', '.join( resultSet )   # join with comma to handle overlapping features
-                    effect = var.eff
-                    fc = var.fc
-                    source = os.path.split(fn)[1]
-                    count = 0 # initialize this database column now to save for later
-                    freq = 0.0 # initialize this database column now to save for later
-                    
-                    # build dict to insert
-                    # Step 1: define the columns and their values
-                    # Step 2. zip the column names and column values together into a dictionary
-                    # Step 3. Add this round to the master variants data frame dictinoary
-
-                    for feature in features.split(', '):
-                        # Removing columns from the following 'columns' list will mask them from output
-                        columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
-                        values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
-
-                        vardata = dict(zip( columns, values ))
-                        for key in vardata.keys():
-                            varD[key].append(vardata[key])
-                    '''
-
-
-
-
-
-        # start homebrew vcf reader
-        '''
-        1. empty file? 
-        2. filter row by filter column
-        3. get effect and FC 
-        4. filter row by region 
-        5. add to result set 
-        '''
-        '''
-        varReader = csv.reader(varFile, delimiter="\t")
-
-        try:
-            row = varReader.next()
-        except StopIteration:
-            # a file was empty (i.e. no first row to read)
-            print("Empty file {}".format(fn))
-            continue    # next fn in variantFiles
-
-        while row[0].startswith('##'):
-            row = varReader.next()
-
-        header = row
-        if len(header) == 0: raise ValueError('Invalid header')
-        fieldId = dict(zip(header, range(0, len(header))))
-
-        # after reading the two header rows, read data
-        for row in itertools.islice(varReader, None):
-            if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
-                continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
-
-            # attempt to extract 'effect' and 'functional consequence' from the VCF line
-            effect = ""
-            fc = ""
-            muts = []
-            loca = []
-            try:
-                for eff in row[fieldId['INFO']].split(';'):
-                    if eff.startswith('EFF='):
-                        for j in eff.split(','):
-                            muts.append(str(j.split('|')[3]))
-                            loca.append(str(j.split('(')[0]).replace('EFF=',''))
-                # reformat the lists to exclude blanks and be semicolon delimited
-                for mut in set(muts):
-                    if str(mut) != "":
-                        effect += str(mut) + ";"
-                for loc in set(loca):
-                    if str(loc) != "":
-                        fc += str(loc) + ";"
-            except KeyError:
-                # this VCF may not be snpEff annotated
-                pass
-
-            parser = inputs.Parser()
-            source = config.source[fn.split('/')[-1]]
-            var = parser.parse(source, row, fieldId, header, fn, effect, fc)
-            if not var:
-                # this mutation had no data in this sample
-                continue
-            if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
-                continue
-
-            # find bin for variant location
-            try:
-                resultSet = gas[ var.pos ]      # returns a set of zero to n IDs (e.g. gene symbols)
-            except KeyError:                    # which I'll use as a key on the knownFeatures dict
-                                                # and each feature with matching ID gets allocated the variant
-                # this mutation is on a contig unknown to the GAS
-                resultSet = set()
-                unrecognizedContigs.add(var.pos.chrom)
-                unrecognizedMutations += 1
-           
-            if resultSet:
-                for featureName in resultSet:
-                    kvar = skipThisIndel(var, knownFeatures, featureName)
-                    if bool(kvar):
-                        # Sanity check to see what indels are being overwritten by existing vars
-                        var.ref = kvar[0]
-                        var.alt = kvar[1]
-                    
-                    knownFeatures[featureName].variants.add(var)
-            
-            # Descriptive variable names
-            chr = var.pos.chrom
-            pos = int(var.pos.pos)
-            ref = var.ref
-            alt = var.alt 
-            vf = var.frac
-            dp = var.dp
-            features = ', '.join( resultSet )   # join with comma to handle overlapping features
-            effect = var.eff
-            fc = var.fc
-            sample = config.filename2samples[str(fn.split('/')[-1])]
-            source = os.path.split(fn)[1]
-            count = 0 # initialize this database column now to save for later
-            freq = 0.0 # initialize this database column now to save for later
-            
-            # build dict to insert
-            # Step 1: define the columns and their values
-            # Step 2. zip the column names and column values together into a dictionary
-            # Step 3. Add this round to the master variants data frame dictinoary
-
-            for feature in features.split(', '):
-                # Removing columns from the following 'columns' list will mask them from output
-                columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
-                values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
-
-                vardata = dict(zip( columns, values ))
-                for key in vardata.keys():
-                    varD[key].append(vardata[key])
-            # end homebrew vcf reader
-            '''
 
         if unrecognizedContigs:
             throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))

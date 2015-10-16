@@ -82,15 +82,18 @@ def parseJSON(json_config):
     config.bams = {}
     for i in JD['samples']:
         try:
-            if len(i['bam']) >= 1:
-                for bam in i['bam']:
-                    config.inputFiles.append(bam['path'])
+            # make a list of bam file paths defined by the JSON config
+            #   i.e. extract the path of every file, if the file type is bam
+            bams = [x['path'] for x in i['files'] if x['type'] == "bam"]
+            if len(bams) >= 1:
+                for bam in bams:
+                    config.inputFiles.append(bam)
                     config.samples.append(i['id'])
                     try:
-                        config.bams[i['id']].append(bam['path'])
+                        config.bams[i['id']].append(bam)
                     except:
                         config.bams[i['id']] = []
-                        config.bams[i['id']].append(bam['path'])
+                        config.bams[i['id']].append(bam)
         except:
             throwWarning("Sample {0} has no BAM file!".format(i))
     return config 
@@ -174,10 +177,12 @@ def GaugeDepth(config) :
                 reg_str = str(str(item.split(':')[1]).split('-')[0])
                 reg_end = str(str(item.split(':')[1]).split('-')[1])
                 name = str(reg_chr) + ":" + str(reg_str) + "-" + str(reg_end)
-            except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
-                reg_str = 1
-                reg_end = 1E9
-                name = str(reg_chr)
+            except IndexError:                                  # does not support whole chromosome regions [ex: chr2]
+                if reg_str:                                     # but will permit single-base definitions [ex: chr2:11200]
+                    reg_end = int(reg_str)
+                    name = str(reg_chr)
+                else:
+                    throwWarning("Region must have valid chromosome and position: chr2:1234, chr3:1234-12345, etc.")
             regionDict[reg_chr].add((reg_str, reg_end, name))
     if not regionDict:
         abortWithMessage("Regions not set!")
@@ -195,14 +200,9 @@ def GaugeDepth(config) :
                 continue
             for contig, ROI in regionDict.items():
                 for window in ROI:
-                    try:
-                        bed_name = window[2]
-                    except:
-                        stop()
-                    # make window 0
+                    bed_name = window[2]
+                    # make window 0-based
                     window = [int(window[0]) - 1, int(window[1])]
-                    
-                    
                     # loop over all ROIs, checking this bam 
                     if config.p:
                         #point method 
