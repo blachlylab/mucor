@@ -82,12 +82,17 @@ class Parser(object):
                 # prepare ref depth and alt depth in case VAF or DP was not defined 
                 rd = int(values['AD'].split(',')[0])
                 ad = int(values['AD'].split(',')[1])
-            if not dp and 'AD' in values.keys():
-                # try to calculate dp from AD column
-                dp = rd + ad
             if not vf and 'AD' in values.keys():
                 # try to calculate vaf from AD column
                 vf = float(ad)/float(ad + rd)
+            if not dp and 'AD' in values.keys():
+                # try to calculate dp from AD column
+                if vf:
+                    # if AD and VF are both defined, this will yield the same DP defined in the INFO column
+                    dp = round(ad/vf)
+                else:
+                    # the sum of ref and alt alleles may not equal total depth, if there are two mutations at the same location, or if a single base was mutated and not shown
+                    dp = rd + ad
             out[sample] = (dp, vf) 
         return out
 
@@ -231,15 +236,12 @@ class Parser(object):
             try:
                 dp = int(values['DP'])
                 ad = str(values['AD'])
-                if str(',') in ad:
-                    ref_count = int(ad.split(',')[0])
-                    alt_count = int(ad.split(',')[1])
-                    try:
-                        vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
-                    except:
-                        vf=0.0
-                else:
-                    abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
+                ref_count = int(ad.split(',')[0])
+                alt_count = int(ad.split(',')[1])
+                try:
+                    vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
+                except:
+                    pass
             except:
                 throwWarning("Cannot parse Haplotype Caller output: insufficient fields. " + ", ".join([str(x) for x in values.keys()]))
             out[sample] = (dp, vf)
