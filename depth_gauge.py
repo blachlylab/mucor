@@ -64,7 +64,8 @@ def parseJSON(json_config):
     config = Config()
     try:
         JD = json.load(open(json_config,'r'))
-    except:
+    except ValueError as json_error:
+        throwWarning(json_error.message)
         abortWithMessage("Could not load the given JSON config file. See the example config for proper formatting.")
 
     # write dictionary values into a more human-friendly config class
@@ -81,21 +82,22 @@ def parseJSON(json_config):
     config.samples = []
     config.bams = {}
     for i in JD['samples']:
-        try:
-            # make a list of bam file paths defined by the JSON config
-            #   i.e. extract the path of every file, if the file type is bam
-            bams = [x['path'] for x in i['files'] if x['type'] == "bam"]
-            if len(bams) >= 1:
-                for bam in bams:
-                    config.inputFiles.append(bam)
-                    config.samples.append(i['id'])
-                    try:
-                        config.bams[i['id']].append(bam)
-                    except:
-                        config.bams[i['id']] = []
-                        config.bams[i['id']].append(bam)
-        except:
-            throwWarning("Sample {0} has no BAM file!".format(i))
+        # make a list of bam file paths defined by the JSON config
+        #   i.e. extract the path of every file, if the file type is bam
+        bams = [x['path'] for x in i['files'] if x['type'] == "bam"]
+        if len(bams) >= 1:
+            for bam in bams:
+                config.inputFiles.append(bam)
+                config.samples.append(i['id'])
+                try:
+                    config.bams[i['id']].append(bam)
+                except KeyError:
+                    config.bams[i['id']] = []
+                    config.bams[i['id']].append(bam)
+        else:
+            throwWarning("Sample {0} has no BAM file!".format(i['id']))
+    if not config.bams:
+        abortWithMessage("No bam files defined!")
     return config 
 
 def parseAndValidateRegions(regions, json_config):
@@ -230,7 +232,7 @@ def GaugeDepth(config) :
                             try:
                                 tmp_dict[pileupcolumn.pos]
                                 tmp_dict[pileupcolumn.pos] = pileupcolumn.n       
-                            except:
+                            except KeyError:
                                 #skip this position if it's not in the region dict
                                 continue
                         avg_covg = np.mean(tmp_dict.values())
@@ -282,12 +284,13 @@ def printOutput(config, covDF):
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(config.outputDir))
     outDF = covDF.groupby(['chr','start','stop','name']).apply(SamplesToColumns).reset_index(drop=True)
-    try:
-        outXLSX = pd.ExcelWriter(str(config.outputDir) + "/" + config.outfile, engine='xlsxwriter')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(config.outputDir))
+    # pandas can actually start up an excel writer object using a non-existant or unwritable file path. The error will come when saving to such a path. tested in pandas version 0.16.2
+    outXLSX = pd.ExcelWriter(str(config.outputDir) + "/" + config.outfile, engine='xlsxwriter')
     outDF.to_excel(outXLSX, 'Depth Gauge', index=False)
-    outXLSX.save()
+    try:
+        outXLSX.save()
+    except IOError:
+        abortWithMessage("Output directory is not writable or doesn't exist: {0}".format(config.outputDir))
     totalTime = time.clock() - startTime
     print("\t{0}: {1} rows".format(str(config.outputDir) + "/" + config.outfile , len(outDF)))     
     return True
@@ -320,7 +323,7 @@ def main():
     elif not os.path.exists(config.outputDir):
         try:
             os.makedirs(config.outputDir)
-        except:
+        except OSError:
             abortWithMessage("Error when creating output directory {0}".format(config.outputDir))
 
     # check that all specified variant files exist

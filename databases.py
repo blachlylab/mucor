@@ -30,7 +30,7 @@ import os
 import sys
 try:
     import tabix
-except:
+except ImportError:
     pass
 
 class KnownVariant:
@@ -76,7 +76,7 @@ def dbLookup(var, dbs):
             if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
                 try:
                     database = gzip.open(db)
-                except:
+                except IOError:
                     print("WARNING: could not open {}".format(db))
                     continue
             elif os.path.splitext(db)[1] == ".vcf":

@@ -101,7 +101,7 @@ class Writer(object):
         config = self.config
         try: 
             ofRunInfo = open(outputDirName + "/" + outputFileName, 'w+')
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         # =========================
         # run_info.txt
@@ -130,7 +130,7 @@ class Writer(object):
         varDF = self.data
         try:
             ofCounts = open(outputDirName + "/" + outputFileName, 'w+')
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         
         grouped = varDF.groupby('feature')
@@ -175,16 +175,16 @@ class Writer(object):
         outputDirName = self.outputDirName
         outputFileName = self.file_names['featXsamp']
         varDF = self.data
-        try:
-            ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
-        except:
-            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        ofFeatureXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         
         groupedDF = pd.DataFrame(varDF.groupby(['feature','sample']).apply(len))
         outDF = groupedDF.stack().unstack(1)
         outDF.index = outDF.index.droplevel(1)
         outDF.to_excel(ofFeatureXSample, 'Feature by Sample', na_rep=0, index=True)
-        ofFeatureXSample.save()
+        try:
+            ofFeatureXSample.save()
+        except IOError:
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
 
@@ -200,16 +200,16 @@ class Writer(object):
         outputDirName = self.outputDirName
         outputFileName = self.file_names['mutXsamp']
         varDF = self.data
-        try:
-            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
-        except:
-            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         
         groupedDF = pd.DataFrame(varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(len))
         outDF = groupedDF.stack().unstack(5)
         outDF.index = outDF.index.droplevel(5)
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feature and Mutation by Sample', na_rep=0, index=True)
-        ofFeature_and_MutationXSample.save()
+        try:
+            ofFeature_and_MutationXSample.save()
+        except IOError:
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
 
@@ -225,15 +225,15 @@ class Writer(object):
         outputDirName = self.outputDirName
         outputFileName = self.file_names['mutXsampVAF']
         varDF = self.data
-        try:
-            ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
-        except:
-            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
+        ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
         
         outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
         outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
-        ofFeature_and_MutationXSample.save()
+        try:
+            ofFeature_and_MutationXSample.save()
+        except IOError:
+            abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         print("\t{0}: {1} rows".format(str(outputDirName) + "/" + outputFileName, len(outDF)))        
         return True 
 
@@ -271,7 +271,7 @@ class Writer(object):
             if xls:
                 outputFileName = self.file_names['xls']
                 ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         
         # Group by (chr, pos, ref, alt, feature)
@@ -332,7 +332,7 @@ class Writer(object):
                 varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
                 ofLongVariantDetailsXLS.save()
                 print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         
         return True
@@ -349,7 +349,7 @@ class Writer(object):
         varDF = self.data
         try:
             ofVariantBeds = open(outputDirName + "/" + outputFileName, 'w+')
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
@@ -371,7 +371,7 @@ class Writer(object):
         varDF = self.data
         try:
             ofVariantVCF = open(outputDirName + "/" + outputFileName, 'w+')
-        except:
+        except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
          
         #VCF header to stream

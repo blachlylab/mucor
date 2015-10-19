@@ -144,7 +144,8 @@ def parseJSON(json_config):
     config = Config()
     try:
         JD = json.load(open(json_config,'r'))
-    except:
+    except ValueError as json_error:
+        throwWarning(json_error.message)
         abortWithMessage("Could not load the given JSON config file. See the example config for proper formatting.")
 
     # write dictionary values into a more human-friendly config class
@@ -261,9 +262,9 @@ def parseGffFile(gffFileName, featureType, fast, union):
                     del knownFeatures[badGene]
                     # uncomment below to see which genes are being deleted 
                     # print(badGene + " deleted from knownfeat")
-                except:
+                except KeyError:
                     pass
-        except:
+        except IOError:
             # There likely isn't a list of genes
             # Recommend that the user obtain said list, or face potential errors in feature labels and counts
             pass
@@ -506,16 +507,17 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 source = config.source[ os.path.basename(fn) ]
                 samps = parser.parse(row, source)
                 for var in samps:
-                    if not var or var.sample not in config.samples:
-                        # this sample has no mutation data at the given location, or this sample was not specified as a sample of interest in the JSON config 
-                        continue
-                    var.source = os.path.basename(fn)
                     if len(samps) == 1:
                         # if not multi-sample VCF, pull sample ID from the json config
                         var.sample = config.filename2samples[str(fn.split('/')[-1])]
                     elif len(samps) > 1:
                         # if multi-sample VCF, use sample ID as defined by the VCF column(s) rather than the config
                         pass
+                    if not var or var.sample not in config.samples:
+                        # this sample has no mutation data at the given location, or this sample was not specified as a sample of interest in the JSON config 
+                        continue
+                    var.source = os.path.basename(fn)
+                    
                     varD = integrateVar(var, varD, config, gas, knownFeatures)
 
         if unrecognizedContigs:
@@ -627,7 +629,7 @@ def main():
     elif not os.path.exists(config.outputDir):
         try:
             os.makedirs(config.outputDir)
-        except:
+        except OSError:
             abortWithMessage("Error when creating output directory {0}".format(config.outputDir))
 
     # check that all specified variant files exist

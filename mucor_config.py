@@ -176,7 +176,7 @@ def blankJSONDict():
                 elif str(files).split('.')[-1] == str("bam"):
                     try:
                         tmpSampleDict['bam'].append({'path':str(full_path)} )
-                    except:
+                    except KeyError:
                         tmpSampleDict['bam'] = list()
                         tmpSampleDict['bam'].append({'path':str(full_path)})
             # Not sure if these still work 
@@ -209,7 +209,7 @@ def processFile(full_path, tmpSampleDict):
         try:
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
             # tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
-        except:
+        except KeyError:
             tmpSampleDict['files'] = list()
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
 # Not sure if these still work 

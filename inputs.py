@@ -107,7 +107,7 @@ class Parser(object):
                 ro = int(values['RO'])
                 dp = int(values['DP'])
                 vf = float(ao)/float(dp)
-            except:
+            except KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -143,7 +143,7 @@ class Parser(object):
             try:
                 dp = values['DP']
                 vf = values['FA']
-            except:
+            except KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -159,7 +159,7 @@ class Parser(object):
                 dp = int(values['DP'])
                 ad = int(values['AD'].split(',')[1])
                 vf = float(ad)/float(dp)
-            except:
+            except KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -222,7 +222,7 @@ class Parser(object):
             try:
                 dp = int(values['DP'])
                 vf = float(values['FREQ'].strip('%'))/100.0
-            except:
+            except KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -238,12 +238,9 @@ class Parser(object):
                 ad = str(values['AD'])
                 ref_count = int(ad.split(',')[0])
                 alt_count = int(ad.split(',')[1])
-                try:
-                    vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
-                except:
-                    pass
-            except:
-                throwWarning("Cannot parse Haplotype Caller output: insufficient fields. " + ", ".join([str(x) for x in values.keys()]))
+                vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
+            except KeyError:
+                pass
             out[sample] = (dp, vf)
         return out
 
@@ -258,7 +255,7 @@ class Parser(object):
                 ro = int(values['RO'])
                 ao = sum([int(x) for x in values['AO'].split(',')])
                 vf = float( float(ao)/float(ao + ro) )
-            except:
+            except  KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -286,7 +283,7 @@ class Parser(object):
                     if not dp:
                         dp = ro + ao
                     vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
-                except:
+                except KeyError:
                     if not dp:
                         throwWarning("Could not determine depth for {0} using GenericGATK parser".format(sample))
                     if not vf:
@@ -350,7 +347,7 @@ def parse_EFC(INFO):
                 try:
                     if str(j.split('_')[1]) not in str(effect):
                         effect += str(j.split('_')[1]) + ";"
-                except:
+                except IndexError:
                     pass
         elif str(i) == "EXON":
             fc += 'EXON'
