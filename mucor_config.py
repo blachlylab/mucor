@@ -319,7 +319,6 @@ def getJSONDict(args):
         # uniquify the list of files associated with the sample, in case they were supplied directly via (-i) and found while directory crawling (-d)
         tmpSampleDict['files'] =  { v['path']:v for v in tmpSampleDict['files']}.values()
         json_dict['samples'].append(tmpSampleDict)
-    
     return json_dict
 
 def inconsistentFilesPerSample(json_dict):
@@ -332,6 +331,21 @@ def inconsistentFilesPerSample(json_dict):
         numset.add(len(sample['files']))
     if len(numset) > 1:
         return True
+
+def filesWithoutSamples(json_dict, inputs):
+    '''
+    Survey the list of input files (explicitly passed with -i) and return those that are not part of the json dictionary.
+    This indicates that the user wanted to analyze them with Mucor, but they were not appropriately identified/associated with a sample ID.
+    '''
+    # make a list of unique, full file paths associated with each sample
+    #   i.e. the files that will be analyzed in the main script
+    #   WARNING: complicated, chained python list comprehension ahead! 
+    identified_file_paths = set([ os.path.abspath(x['path']) for b in json_dict['samples'] for x in b['files'] ])
+    # make a list of unique, full file paths that were input to the config script via (-i)
+    input_file_paths =  set([ os.path.abspath(x) for x in inputs ])
+    # subtract the sets to identify the files passed via (-i) that were NOT found to be associated with any input sample ID
+    missing_file_paths = input_file_paths - identified_file_paths
+    return missing_file_paths
 
 class exampleJSON(argparse.Action):
     '''
@@ -415,6 +429,11 @@ def main():
 
     # Construct JSON dictionary and dump it to the config file
     json_dict = getJSONDict(args)
+    missing_file_paths = filesWithoutSamples(json_dict, args['inputs']) 
+    if missing_file_paths:
+        throwWarning("Some input files were not associated with any sample name")
+        for fn in missing_file_paths:
+            print(fn)
     if inconsistentFilesPerSample(json_dict):
         throwWarning("Inconsistent number of files per sample")
         print("File #\tSample ID")
