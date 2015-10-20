@@ -223,6 +223,59 @@ def processFile(full_path, tmpSampleDict):
         pass 
     return tmpSampleDict           
 
+def parseAndValidateRegions(regions, json_config=False): 
+    '''
+    Read in a list of bed file locations and/or string-type chromosome ranges, uniquify it, and return a list of tuples in the form of (chrom, start, stop)
+    Note: json_config is an optional argument. It is not used by mucor_config, but will be used by depth_gauge. This is because depth gauge can take regions via the passed json config and from the command line simultaneously. 
+    '''
+    if json_config:
+        unique_region_list = [ x for x in set(regions.split(',')) | set(json_config.regions) if bool(x) ]
+        verbose = True 
+    else:
+        unique_region_list = [ x for x in set(regions.split(',')) if bool(x) ]
+        verbose = False # do not print running progress updates if executed from this mucor_config script
+    regions_list = []
+    if verbose:
+        print("== Parsing and Validating Regions ==")
+    for i in unique_region_list:
+        # the parse
+        if str(i.split('.')[-1]).lower() == "bed":
+            # this is a bed file of regions
+            # it will be parsed in the main python script
+            if os.path.isfile(str(i)):
+                regions_list.append(os.path.expanduser(str(i)))
+            else:
+                throwWarning("BED file {0} cannot be found".format(str(i)))
+                continue
+        elif str(str(i).split(':')[0]).startswith('chr') and str(str(i).split(':')[0]) != "chr": # these two statements could be combined with a regular expression
+            # this looks like a 'chromosome:start-stop' formatted region
+            chrom = str(i).split(':')[0]
+            start = 0
+            end = 0
+            try:                                    # does the input region have valid start and ends?
+                start = int(re.split('-|\.\.', i.split(':')[1])[0]) # support chr:start-stop and chr:start..stop style location notation
+                end   = int(re.split('-|\.\.', i.split(':')[1])[1])
+                regions_list.append((str(chrom), start, end))
+            except ValueError:                      # start and/or end are invalid, i.e. could not be converted to int
+                throwWarning("Region {0} is not valid. Follow standard convention, Ex: chr1:100-300".format(str(i)))
+                continue
+            except IndexError:                      # only chromosome was defined, or only chromosome:start . this is permitted (whole chromosome region, or single base pair)
+                if start and not end:
+                    # single point
+                    end = start
+                    regions_list.append((str(chrom), start, end))
+                elif not start and not end:
+                    # whole contig
+                    regions_list.append((str(chrom), None, None))
+        else:
+            throwWarning("Region {0} is not a bed file or valid region.".format(i))
+        if verbose:
+            print("\t{0}".format(i))
+
+    if not regions_list:
+        abortWithMessage("Regions not set")
+    return regions_list
+
 def getJSONDict(args):
     '''
     Create the JSON dictionary. JSON dict keys are identical to the Config class in config.py. 
@@ -244,28 +297,8 @@ def getJSONDict(args):
     json_dict['filters'] = [x for x in outFilters] # finally, convert set to list
 
     # Genomic regions
-    json_dict['regions'] = []
     if args['regions']: # user has defined regions to focus on
-        for i in str(args['regions']).split(','):
-            if str(i.split('.')[-1]).lower() == "bed":
-                # this is a bed file of regions
-                # it will be parsed in the main python script
-                if os.path.isfile(str(i)):
-                    json_dict['regions'].append(os.path.expanduser(str(i)))
-                else:
-                    abortWithMessage("BED file {0} cannot be found".format(str(i)))
-            elif str(str(i).split(':')[0]).startswith('chr') and str(str(i).split(':')[0]) != "chr":
-                # this looks like a 'chromosome:start-stop' formatted region
-                try:                                    # does the input region have valid start and ends?
-                    int(str(str(i).split(':')[1])[0])
-                    int(str(str(i).split(':')[1])[1])
-                    json_dict['regions'].append(i)
-                except ValueError:                      # start and/or end are invalid
-                    abortWithMessage("Region {0} is not valid. Follow standard convention, Ex: chr1:100-300".format(str(i)))
-                except IndexError:                      # only chromosome was defined. this is permitted (whole chromosome region)
-                    json_dict['regions'].append(i)
-            else:
-                abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
+        json_dict['regions'] = parseAndValidateRegions(args['regions'])
 
     # Variant databases 
     json_dict['databases'] = defaultdict(str)

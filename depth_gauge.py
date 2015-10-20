@@ -23,6 +23,7 @@ from __future__ import print_function
 
 # python standard modules
 import os
+import re
 import sys
 reload(sys)  
 sys.setdefaultencoding('utf8')
@@ -47,6 +48,7 @@ import pysam
 
 # mucor modules
 from config import Config
+from mucor_config import parseAndValidateRegions 
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
@@ -100,42 +102,6 @@ def parseJSON(json_config):
         abortWithMessage("No bam files defined!")
     return config 
 
-def parseAndValidateRegions(regions, json_config):
-    print("== Parsing and Validating Regions ==")
-    regions_list = []
-    if regions: # user has defined regions to focus on
-        for i in str(regions).split(','):
-            print("\t{0}".format(i))
-            if str(i.split('.')[-1]).lower() == "bed":
-                # this is a bed file of regions
-                # it will be parsed in the main python script
-                if os.path.isfile(str(i)):
-                    regions_list.append(os.path.expanduser(str(i)))
-                else:
-                    abortWithMessage("BED file {0} cannot be found".format(str(i)))
-            elif str(str(i).split(':')[0]).startswith('chr') and str(str(i).split(':')[0]) != "chr":
-                # this looks like a 'chromosome:start-stop' formatted region
-                try:                                    # does the input region have valid start and ends?
-                    int(str(str(i).split(':')[1])[0])
-                    int(str(str(i).split(':')[1])[1])
-                    regions_list.append(i)
-                except ValueError:                      # start and/or end are invalid
-                    abortWithMessage("Region {0} is not valid. Follow standard convention, Ex: chr1:100-300".format(str(i)))
-                except IndexError:                      # only chromosome was defined. this is permitted (whole chromosome region)
-                    regions_list.append(i)
-            else:
-                abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
-        json_config.regions = regions_list
-    elif not regions and json_config.regions: 
-        # user declared no regions when running depth gauge, but there are usable regions in the json
-        for i in json_config.regions:
-            print("\t{0}".format(i))
-        return json_config
-    else:
-        # there are no regions to interrogate with depth gauge
-        abortWithMessage("Regions not set")
-    return json_config
-
 def parseRegionBed(regionfile, regionDictIn):
     ''' 
     Read through the supplied bed file and add the rows to the input region dictionary before returning it. Appends to the input dict, rather than overwriting it.
@@ -173,19 +139,18 @@ def GaugeDepth(config) :
     for item in config.regions:
         if str(str(item).split('.')[-1]).lower() == 'bed':      # this item is a bed file
             regionDict = parseRegionBed(item, regionDict)
-        elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
-            reg_chr = str(item.split(':')[0])
-            try:
-                reg_str = str(str(item.split(':')[1]).split('-')[0])
-                reg_end = str(str(item.split(':')[1]).split('-')[1])
+        else:                                                   # this was defined as a string
+            reg_chr = item[0]
+            reg_str = item[1]
+            reg_end  = item[2]
+            if reg_str >= 0 and reg_end > reg_str:
                 name = str(reg_chr) + ":" + str(reg_str) + "-" + str(reg_end)
-            except IndexError:                                  # does not support whole chromosome regions [ex: chr2]
-                if reg_str:                                     # but will permit single-base definitions [ex: chr2:11200]
-                    reg_end = int(reg_str)
-                    name = str(reg_chr)
-                else:
-                    throwWarning("Region must have valid chromosome and position: chr2:1234, chr3:1234-12345, etc.")
+            elif reg_str >= 0 and reg_str == reg_end:
+                name = str(reg_chr) + ":" + str(reg_str)
+            elif not reg_str and not reg_end:
+                name = str(reg_chr)
             regionDict[reg_chr].add((reg_str, reg_end, name))
+
     if not regionDict:
         abortWithMessage("Regions not set!")
 
@@ -200,11 +165,24 @@ def GaugeDepth(config) :
             except ValueError:
                 throwWarning("Cannot open file {0}".format(fn))
                 continue
+            contig_length_dict = dict(zip(samfile.references, samfile.lengths)) # save contig lengths for later
             for contig, ROI in regionDict.items():
                 for window in ROI:
                     bed_name = window[2]
                     # make window 0-based
-                    window = [int(window[0]) - 1, int(window[1])]
+                    try:
+                        window = [int(window[0]) - 1, int(window[1])]
+                    except TypeError: 
+                        # start and/or stop were not defined - pull them from contig dictionary
+                        if not window[0]:
+                            start = 0
+                        else:
+                            start = int(window[0] - 1)
+                        if not window[1]:
+                            end = contig_length_dict[contig]
+                        else:
+                            end = int(window[1])
+                        window = [start, end]
                     # loop over all ROIs, checking this bam 
                     if config.p:
                         #point method 
@@ -307,7 +285,6 @@ def main():
     parser.add_argument("-r", "--regions", default="", help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
     args = parser.parse_args()
     config = parseJSON(args.json)
-    config = parseAndValidateRegions(args.regions, config)
     config.p = bool(args.p)
     config.c = bool(args.c)
     if config.p and config.c:
@@ -330,7 +307,7 @@ def main():
     for fn in config.inputFiles:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
-
+    config.regions = parseAndValidateRegions(args.regions, config) 
     covDF = GaugeDepth(config)
     printOutput(config, covDF)
     # pretty print newline before exit
