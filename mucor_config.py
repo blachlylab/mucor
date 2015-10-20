@@ -140,11 +140,11 @@ def blankJSONDict():
     Create a blank, valid JSON dictionary to show an example config file. JSON dict keys are identical to the Config class in config.py. 
     '''
     json_dict = defaultdict()
-    json_dict['outputDir'] = str("outputDir_path")
-    json_dict['gff'] = str("gff_path")
+    json_dict['outputDir'] = str("./outputDir_path")
+    json_dict['gff'] = str("~/ref/gff_path.gff")
     json_dict['union'] = bool(True)
-    json_dict['fast'] = str("fastDir_path") # This will be boolean "False" by default, or a str() if declared
-    json_dict['feature'] = str("feature")
+    json_dict['fast'] = str("~/ref/fastDir_path/") # This will be boolean "False" by default, or a str() if declared
+    json_dict['feature'] = str("gene_name")
     json_dict['samples'] = list(dict())
 
     # VCF filters
@@ -154,7 +154,7 @@ def blankJSONDict():
     json_dict['regions'] = []
 
     # Variant databases 
-    json_dict['databases'] = {"dbName":"db_Location"}
+    json_dict['databases'] = {"dbName":"~/ref/db_Location.vcf.gz"}
 
     # Output formats
     json_dict['outputFormats'] = []
@@ -165,7 +165,7 @@ def blankJSONDict():
         tmpSampleDict = defaultdict()
         tmpSampleDict['id'] = str(sid)
         tmpSampleDict['files'] = list()
-        for root, dirs, files in ["project", "dir1", "sample1-a.vcf"], ["project", "dir1", "sample1.bam"], ["project", "dir2", "sample1-b.vcf"], ["project", "dir3", "sample2.vcf"], ["project", "dir3", "sample2.bam"]:
+        for root, dirs, files in ["~/project", "dir1", "sample1-a.vcf"], ["~/project", "dir1", "sample1.bam"], ["~/project", "dir2", "sample1-b.vcf"], ["~/project", "dir3", "sample2.vcf"], ["~/project", "dir3", "sample2.bam"]:
             if str(sid) in str(files): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
                 full_path = os.path.join(root, dirs, files)
                 source = "VarScan"
@@ -175,10 +175,10 @@ def blankJSONDict():
                     tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
                 elif str(files).split('.')[-1] == str("bam"):
                     try:
-                        tmpSampleDict['bam'].append({'path':str(full_path)} )
+                        tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
                     except KeyError:
-                        tmpSampleDict['bam'] = list()
-                        tmpSampleDict['bam'].append({'path':str(full_path)})
+                        tmpSampleDict['files'] = list() 
+                        tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)})
             # Not sure if these still work 
                 elif str(files).split('.')[-1].lower() == str("maf"):
                     tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
