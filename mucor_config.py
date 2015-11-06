@@ -282,7 +282,7 @@ def getJSONDict(args):
     Converts the user input args from argparse into a dictionary
     '''
     json_dict = defaultdict()
-    json_dict['outputDir'] = str(args['output_directory']).split('/')[-1]
+    json_dict['outputDir'] = os.path.abspath(os.path.expanduser(str(args['output_directory'])))
     json_dict['gff'] = str(args['gff'])
     json_dict['union'] = bool(args['union'])
     json_dict['fast'] = args['archive_directory']
@@ -299,6 +299,8 @@ def getJSONDict(args):
     # Genomic regions
     if args['regions']: # user has defined regions to focus on
         json_dict['regions'] = parseAndValidateRegions(args['regions'])
+    else:
+        json_dict['regions'] = args['regions']
 
     # Variant databases 
     json_dict['databases'] = defaultdict(str)

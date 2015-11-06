@@ -19,7 +19,9 @@
 from __future__ import print_function
 import HTSeq
 import sys
+import os
 from variant import Variant
+import numpy as np
 from pdb import set_trace as stop
 
 def throwWarning(message, help = False):
@@ -49,7 +51,8 @@ class Parser(object):
                                         "VarScan":self.parse_VarScan,
                                         "HaplotypeCaller":self.parse_HapCaller,
                                         "FreeBayes":self.parse_FreeBayes,
-                                        "GenericGATK":self.parse_GenericGATK }
+                                        "GenericGATK":self.parse_GenericGATK,
+                                        "GenericINFO":self.parse_GenericINFO }
 
     def parse(self, row, source):
         self.source = source
@@ -128,7 +131,7 @@ class Parser(object):
         dp = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
         position = int(row[fieldId['position']])
 
-        var = Variant(source=fn.split('/')[-1], sample='', pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+        var = Variant(source=os.path.basename(fn), sample='', pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
         
     def parse_MuTectVCF(self, samples):
@@ -292,6 +295,25 @@ class Parser(object):
             out[sample] = (dp, vf) 
         return out
 
+    def parse_GenericINFO(self, samples):
+        '''
+        Generic VCF parser which extracts allele frequency and depth from the INFO field, rather than the SAMPLE field associated with a specific sample. May be useful for cases in which aggregate VAF and DP are more interesting than per-sample metrics, or when aggregate values are available and per-sample values are not.
+        Input: 
+        '''
+        out = {}
+        info = self.row.info
+        for sample, values in samples.items():
+            dp = None 
+            vf = None 
+            for key in ['VAF', 'VF', 'AF']: # expandable to accomadate other abbreviations  
+                if key in info:
+                    vf = np.sum(info[key])  # sum allele frequencies in the event that the position is multi-allelic
+            for key in ['DP']:              # expandable to accomadate other abbreviations 
+                if key in info:
+                    dp = info[key]
+            out[sample] = (dp, vf)
+        return out
+
     def parse_MAF(self):
         ''' DEPRECIATED AND UNTESTED'''
         ''' maf filetype parser function. Input: InputParser object. Output: Variant object '''
@@ -312,44 +334,39 @@ class Parser(object):
             ref = ""
         if alt == "-":
             alt = ""   
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+        var = Variant(source=os.path.basename(fn), pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
+
+def castList(list_or_string):
+    '''
+    Input: a string or a list 
+    Output: list 
+    '''
+    if isinstance(list_or_string, list):
+        return list_or_string
+    else:
+        return [list_or_string]
 
 def parse_EFC(INFO):
     # attempt to extract 'effect' and 'functional consequence' from the VCF line
     effect = ""
     fc = ""
-    muts = []
-    loca = []
-    try:
-        for eff in INFO.split(';'):
-            if eff.startswith('EFF='):
-                for j in eff.split(','):
-                    muts.append(str(j.split('|')[3]))
-                    loca.append(str(j.split('(')[0]).replace('EFF=',''))
-        # reformat the lists to exclude blanks and be semicolon delimited
-        for mut in set(muts):
-            if str(mut) != "":
-                effect += str(mut) + ";"
-        for loc in set(loca):
-            if str(loc) != "":
-                fc += str(loc) + ";"
-    except KeyError:
-        # this VCF may not be snpEff annotated
-        pass
+    # check for snpeff annotation first
+    if 'EFF' in INFO:
+        castList(INFO['EFF'])
+        fc = ";".join([x for x in set([ x.split('(')[0] for x in castList(INFO['EFF']) ])])
+        effect = ";".join([x for x in set([ x.split('|')[3] for x in castList(INFO['EFF']) if x.split('|')[3] ])])
 
     # if the MiSeq software reported functional consequence and effect and the file is not snpEff anotated, the MiSeq annotations will be used instead
-    for i in INFO.split(';'):
-        if i.startswith("FC=") and not fc:
-            for j in i.split('=')[1].split(','):
-                if str(j.split('_')[0]) not in str(fc):
-                    fc += str(j.split('_')[0]) + ";"
-                try:
-                    if str(j.split('_')[1]) not in str(effect):
-                        effect += str(j.split('_')[1]) + ";"
-                except IndexError:
-                    pass
-        elif str(i) == "EXON":
-            fc += 'EXON'
+    elif 'FC' in INFO:
+        fc  = ";".join([x for x in set( [y.split('_')[0] for y in castList(INFO['FC'])] )])
+        try:
+            effect = ";".join([x for x in set( [y.split('_')[1] for y in castList(INFO['FC'])] )])
+        except IndexError:
+            # this mutation has no consequence
+            # i.e. Silent, Noncoding, etc. 
+            pass
+        if 'EXON' in INFO:
+            fc += ";EXON"
 
-    return effect.strip(';'), fc.strip(';')
+    return effect, fc

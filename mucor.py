@@ -172,7 +172,7 @@ def parseJSON(json_config):
             if j['type'] == "bam":
                 # skip the bam files
                 continue
-            filename = str(j['path']).split('/')[-1]
+            filename = os.path.basename(j['path'])
             config.filename2samples[filename] = i['id']
             config.source[filename] = j['source']
             config.inputFiles.append(j['path'])
@@ -195,7 +195,7 @@ def parseGffFile(gffFileName, featureType, fast, union):
         unionstatus = str("union")
     else:
         unionstatus = str("no_union")
-    annotFileName = ".".join(gffFileName.split('/')[-1].split('.')[:-1])
+    annotFileName = os.path.splitext(os.path.basename(gffFileName))[0]
     # pickled file is created for specific combinations of gff annotation and feature type. See below for more details. **
 
     archiveFilePath = os.path.expanduser(fast) + str("/") + str(annotFileName) + str('_') + str(featureType) + str("_") + unionstatus + str('.p')
@@ -229,7 +229,7 @@ def parseGffFile(gffFileName, featureType, fast, union):
             pAnnot.close()
         else:
             # no pickled annotation exists for this combination of gff and feature; creating it in the directory provided to the 'fast' option
-            print("Cannot locate annotation archive for " + str(gffFileName.split('/')[-1]) + str(" w/ ") + str(featureType) + " and --union=" + str(union) )
+            print("Cannot locate annotation archive for " + os.path.basename(gffFileName) + str(" w/ ") + str(featureType) + " and --union=" + str(union) )
             print("   Reading in annotation and saving archive for faster future runs") 
             if not os.path.exists( str("/".join(archiveFilePath.split('/')[:-1])) ):
                 os.makedirs( str("/".join(archiveFilePath.split('/')[:-1])) )
@@ -367,7 +367,7 @@ def annotateDF(grp, databases):
         grp.insert(len(grp.columns)-4, source + "_VAF", dbVAFs[source])
     return grp
 
-def integrateVar(var, varD, config, gas, knownFeatures):
+def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations):
     '''
     Ingest the given variant object into the variant dictionary 
     '''
@@ -388,7 +388,6 @@ def integrateVar(var, varD, config, gas, knownFeatures):
                 # Sanity check to see what indels are being overwritten by existing vars
                 var.ref = kvar[0]
                 var.alt = kvar[1]
-            
             knownFeatures[featureName].variants.add(var)
     
     # Descriptive variable names
@@ -419,7 +418,7 @@ def integrateVar(var, varD, config, gas, knownFeatures):
         vardata = dict(zip( columns, values ))
         for key in vardata.keys():
             varD[key].append(vardata[key])
-    return varD
+    return varD, unrecognizedContigs, unrecognizedMutations
 
 def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
     '''
@@ -442,7 +441,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     if regions: # has the user specified any particular regions or region files to focus on?
         regionDict = defaultdict(set)
         for item in regions:
-            if str(str(item).split('.')[-1]).lower() == 'bed':      # this item is a bed file
+            if os.path.splitext(item)[1].lower() == 'bed':      # this item is a bed file
                 regionDict = parseRegionBed(item, regionDict)
             elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
                 reg_chr = str(item.split(':')[0])
@@ -477,7 +476,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 
                 if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
                     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
-                source = config.source[fn.split('/')[-1]]
+                source = config.source[ os.path.basename(fn) ]
                 parser = inputs.Parser()
                 parser.row = row
                 parser.source = source
@@ -503,13 +502,20 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                     continue
                 if regions and not inRegionDict(row.pos.chrom, int(row.pos.pos), int(row.pos.pos), regionDict ):
                     continue
+                row.unpack_info(varReader.infodict)
                 parser = inputs.Parser()
                 source = config.source[ os.path.basename(fn) ]
-                samps = parser.parse(row, source)
+                try:
+                    samps = parser.parse(row, source)
+                except KeyError:
+                    throwWarning("parsing " + fn + " as '" + source + "'")
+                    print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
+                    print("Options include: " + str(parser.supported_formats.keys()).replace("'",""))
+                    break
                 for var in samps:
                     if len(samps) == 1:
                         # if not multi-sample VCF, pull sample ID from the json config
-                        var.sample = config.filename2samples[str(fn.split('/')[-1])]
+                        var.sample = config.filename2samples[ os.path.basename(fn) ]
                     elif len(samps) > 1:
                         # if multi-sample VCF, use sample ID as defined by the VCF column(s) rather than the config
                         pass
@@ -518,10 +524,10 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                         continue
                     var.source = os.path.basename(fn)
                     
-                    varD = integrateVar(var, varD, config, gas, knownFeatures)
+                    varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
 
         if unrecognizedContigs:
-            throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --fast, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
+            throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --archive_directory, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
@@ -588,7 +594,7 @@ def printOutput(config, outputDirName, varDF):
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     ow = output.Writer()
     # identify formats ending in 'xlsx' as the "excel formats," requiring XlsxWriter
-    excel_formats = [ plugin_name for plugin_name,file_name in ow.file_names.items() if file_name.split('.')[-1]=="xlsx" ]
+    excel_formats = [ plugin_name for plugin_name,file_name in ow.file_names.items() if os.path.splitext(file_name)[1]=="xlsx" ]
     if "all" in config.outputFormats:
         # replace output type 'all' with a lsit of all supported output types
         #    and remove 'all' and 'default' to prevent recursive execution of the modules
