@@ -296,7 +296,8 @@ def filterRow(row, fieldId, filters, kind):
     returning True means this row will be filtered out [masked]
     returning False means the row will not be filtered out [pass filter]
     '''
-    if str(kind) == "vcf":
+    if kind in ["vcf", "vcf.gz"]:
+        # this is handled in 1 line elsewhere in the program. Specifically, within the parseVariantFiles function, under the [vcf, vcf.gz] block
         for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
             if rowFilter not in filters:
                 return True
@@ -456,6 +457,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
         kind = str( os.path.splitext(fn)[-1].strip('.').lower() )
+        if kind == "gz" and fn.endswith(".vcf.gz"):
+            kind = "vcf.gz"
         try:
             varFile = open(fn, 'rb')
         except IOError:
@@ -473,7 +476,6 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             if len(header) == 0: raise ValueError('Invalid header')
             fieldId = dict(zip(header, range(0, len(header))))
             for row in itertools.islice(varReader, None):
-                
                 if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
                     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
                 source = config.source[ os.path.basename(fn) ]
@@ -490,9 +492,9 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                     continue
                 if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
                     continue
-                varD = integrateVar(var, varD, config, gas, knownFeatures)
+                varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
 
-        elif kind == "vcf":
+        elif kind in ["vcf", "vcf.gz"]:
             # start htseq vcf reader
             varReader = HTSeq.VCF_Reader(str(fn))
             varReader.parse_meta()
@@ -525,7 +527,9 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                     var.source = os.path.basename(fn)
                     
                     varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
-
+        else:
+            throwWarning("Unable to parse file with extension '{0}': {1}".format(kind, fn))
+            continue
         if unrecognizedContigs:
             throwWarning("{0} Contigs and {1} mutations are in areas unknown to the genomic array of sets. If using --archive_directory, perhaps try again without it.".format( len(unrecognizedContigs), unrecognizedMutations ))
         totalTime = time.clock() - startTime
@@ -537,15 +541,20 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
         varDF = pd.DataFrame(varD, columns=columns)
         # Drop samples with no detected mutation at the given loc
         varDF = varDF.dropna(subset=['dp','vf'], how='all')
-        # Cast dp and vf as appropriate types
+        # Cast dp, vf, and pos as appropriate types
         varDF['dp'] = varDF['dp'].astype(int)
         varDF['vf'] = varDF['vf'].astype(float)
+        varDF.pos   = varDF.pos.astype(int)
     except UnboundLocalError:
         if not varD:            
             # variant dictionary is empty, implying no variants were encountered and kept
             abortWithMessage("Variant DataFrame is empty! No mutations passed filter; check FILTER column of input VCF against allowed filters in JSON config.")
         else:
             abortWithMessage("Could not convert Variant Dictionary into a DataFrame")
+    except ValueError:
+        # likely couldn't convert NaN values from dp column to int
+        # proceed anyway, treating them as floats instead
+        varDF['dp'] = varDF['dp'].astype(float)
     if len(varDF) == 0:
         abortWithMessage("Variant DataFrame is empty! No mutations passed filter; check FILTER column of input VCF against allowed filters in JSON config.")
     # Annotate dataframe using user-supplied vcf databases
@@ -569,11 +578,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     for i in set(varDF['count'].values):
         freqdict[i] = float(i)/float(total)
     varDF['freq'] = varDF['count'].map(freqdict)
-    # Clean up variant dataframe a little
-    # position should be integer, not float
-    varDF.pos   = varDF.pos.astype(int)
-    # depth should be integer, not string
-    varDF.dp   = varDF.dp.astype(int)
+
     # blank features should be more descriptive. this replaces empty strings with 'NO_FEATURE'. 
     #   this is important to later functions that put feature in a pandas index. na_rep pandas function only changes dataframe values, not the index.
     #   see output.FeatureXSample() for an example of when 'feature' is used in a pandas index.

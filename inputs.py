@@ -258,7 +258,7 @@ class Parser(object):
                 ro = int(values['RO'])
                 ao = sum([int(x) for x in values['AO'].split(',')])
                 vf = float( float(ao)/float(ao + ro) )
-            except  KeyError:
+            except KeyError:
                 pass
             out[sample] = (dp, vf) 
         return out
@@ -283,14 +283,20 @@ class Parser(object):
                     # try to determine depth and VAF from 'AD' field, if present
                     ro = int(values['AD'].split(',')[0])
                     ao = sum([int(x) for x in values['AD'].split(',')[1:]])
-                    if not dp:
+                    if not dp and (ro or ao): # is is possible that ro and ao are both 0, leading to division error when calculating vf
                         dp = ro + ao
-                    vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
+                        vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
                 except KeyError:
                     if not dp:
-                        throwWarning("Could not determine depth for {0} using GenericGATK parser".format(sample))
+                        # there may not have been a mutant here, or it was unable to be identified.
+                        #    printing this error can result in overwhelming amounts of warnings
+                        pass
+                        #throwWarning("Could not determine depth for {0} using GenericGATK parser".format(sample))
                     if not vf:
-                        throwWarning("Could not determine variant allele frequency for {0} using GenericGATK parser".format(sample))
+                        # there may not have been a mutant here, or it was unable to be identified.
+                        #    printing this error can result in overwhelming amounts of warnings
+                        pass
+                        #throwWarning("Could not determine variant allele frequency for {0} using GenericGATK parser".format(sample))
                     pass
             out[sample] = (dp, vf) 
         return out
@@ -308,7 +314,7 @@ class Parser(object):
             for key in ['VAF', 'VF', 'AF']: # expandable to accomadate other abbreviations  
                 if key in info:
                     vf = np.sum(info[key])  # sum allele frequencies in the event that the position is multi-allelic
-            for key in ['DP']:              # expandable to accomadate other abbreviations 
+            for key in ['DP', 'ADP']:              # expandable to accomadate other abbreviations 
                 if key in info:
                     dp = info[key]
             out[sample] = (dp, vf)

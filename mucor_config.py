@@ -49,6 +49,7 @@ def throwWarning(message, help = False):
 def DetectMalformedColumns(fn):
     '''
     Pass a variant calls file, including path, and it returns True if the column values are not consistent with VCF format
+    Update: May not be required, now that HTSeq.VCF_Reader is used to parse
     '''
     varFile = open(fn, 'r')
     varReader = csv.reader(varFile, delimiter='\t')
@@ -75,65 +76,60 @@ def DetectDataType(fn):
     '''
     unknown_data_type_name = "Unknown" # what to return when the variant caller cannot be inferred from the header
     try:
-        varFile = open(fn, 'r')
-        varReader = csv.reader(varFile, delimiter='\t')
-        try:
-            row = varReader.next()
-        except StopIteration:
-            throwWarning("Empty file: {0}".format(fn))
-            return unknown_data_type_name
-        while row[0].startswith('##'):
-            if str('Torrent Unified Variant Caller') in str(row): 
-                return "IonTorrent"
-                break
-            elif str('MiSeq') in str(row):
-                return "MiSeq"
-                break
-            elif str('SomaticIndelDetector') in str(row):
-                return "SomaticIndelDetector"
-                break
-            elif str('MuTect') in str(row):
-                return "Mutect"
-                break
-            elif str('muTector') in str(row):
-                return "muTector"
-                break
-            elif str('samtools') in str(row):
-                return "Samtools"
-                break
-            elif str('source=VarScan') in str(row):
-                return "VarScan"
-                break
-            elif str('ID=HaplotypeCaller') in str(row):
-                return "HaplotypeCaller"
-                break
-            elif str('freeBayes') in str(row):
-                return "FreeBayes"
-                break
-            elif str('source=GATK') in str(row):
-                return "GenericGATK"
-                break
-            row = varReader.next()
+        varReader = HTSeq.VCF_Reader(str(fn))
+        varReader.parse_meta() # extract list of sample names in VCF header
+    except IOError:
+        throwWarning("File cannot be read, or does not exist: {0}".format(fn))
         return unknown_data_type_name
-    except:
+    except KeyError:
+        throwWarning("VCF file cannot be read. Is it malformed? {0}".format(fn))
+        return unknown_data_type_name
+    # HTSeq.VCF_Reader will accept and attempt to parse existing files that aren't VCF
+    #   Parseing completes without warning, but the problem manifests as missing metadata (as if no VCF header)
+    meta_info = str(varReader.meta_info()) 
+    if not meta_info:
+        if os.path.splitext(varReader.fos)[1] == ".vcf" or varReader.fos.endswith(".vcf.gz"):
+            throwWarning("VCF file has no metadata. Is this a VCF with a header? {0}".format(fn))
+            return unknown_data_type_name
+        elif os.path.splitext(varReader.fos)[1] == ".out":
+            return "muTector"
+    if str('Torrent Unified Variant Caller') in meta_info: 
+        return "IonTorrent"
+    elif str('MiSeq') in meta_info:
+        return "MiSeq"
+    elif str('SomaticIndelDetector') in meta_info:
+        return "SomaticIndelDetector"
+    elif str('MuTect') in meta_info:
+        return "Mutect"
+    elif str('samtools') in meta_info:
+        return "Samtools"
+    elif str('VarScan') in meta_info:
+        return "VarScan"
+    elif str('HaplotypeCaller') in meta_info:
+        return "HaplotypeCaller"
+    elif str('freeBayes') in meta_info:
+        return "FreeBayes"
+    elif str('GATK') in meta_info: # this check is last, in case a more specific GATK module was detected above
+        return "GenericGATK"
+    else:
         return unknown_data_type_name
 
 def DetectSnpEffStatus(fn):
     '''
     Pass a variant calls file, including path, and return True or False according to whether SnpEff has been run on this file.
     '''
-    varFile = open(fn, 'r')
-    varReader = csv.reader(varFile, delimiter='\t')
     try:
-        row = varReader.next()
-    except StopIteration:
-        abortWithMessage("Empty File: " + str(fn))
-    while row[0].startswith('##'):
-        if str('SnpEff') in str(row): 
-            return True
-            break
-        row = varReader.next()
-    return False
+        varReader = HTSeq.VCF_Reader(str(fn))
+        varReader.parse_meta() # extract list of sample names in VCF header
+    except IOError:
+        throwWarning("File cannot be read, or does not exist: {0}".format(fn))
+    except KeyError:
+        throwWarning("VCF file cannot be read. Is it malformed? {0}".format(fn))
+    metadata = varReader.metadata
+    if str("SnpEff") in str("metadata"):
+        return True
+    else:
+        return False
 
 def blankJSONDict():
     '''
@@ -169,20 +165,20 @@ def blankJSONDict():
             if str(sid) in str(files): # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
                 full_path = os.path.join(root, dirs, files)
                 source = "VarScan"
-                if str(files).split('.')[-1] == str("vcf"):
+                if os.path.splitext(files)[1] == str(".vcf") or files.endswith(".vcf.gz"):
                     tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':False, 'source':source} )
-                elif str(files).split('.')[-1] == str("out"):
+                elif os.path.splitext(files)[1] == str(".out"):
                     tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
-                elif str(files).split('.')[-1] == str("bam"):
+                elif os.path.splitext(files)[1] == str(".bam"):
                     try:
                         tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
                     except KeyError:
                         tmpSampleDict['files'] = list() 
                         tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)})
             # Not sure if these still work 
-                elif str(files).split('.')[-1].lower() == str("maf"):
+                elif os.path.splitext(files)[1].lower() == str(".maf"):
                     tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
-                elif str(files).split('.')[-1].lower() == str("gvf"):
+                elif os.path.splitext(files)[1].lower() == str(".gvf"):
                     tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
                 else:
                     # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
@@ -194,18 +190,21 @@ def blankJSONDict():
 
 def processFile(full_path, tmpSampleDict):
     source = DetectDataType(full_path)
-    if source == "Unknown" and str(full_path).split('.')[-1] == str("vcf"):
+    if source == "Unknown" and (os.path.splitext(full_path)[1] == str(".vcf") or full_path.endswith(".vcf.gz") ):
         throwWarning(full_path)
         print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
         print("Options include: " + str(Parser().supported_formats.keys()).replace("'",""))
-    elif str(full_path).split('.')[-1] == str("vcf"):
+    elif os.path.splitext(full_path)[1] == str(".vcf") or full_path.endswith(".vcf.gz"):
+        '''
+        # may be handled by HTSeq.VCF_Reader 
         if DetectMalformedColumns(full_path):
             throwWarning(full_path)
             print("Malformed or empty VCF file: {0}".format(full_path))
+        '''
         tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
-    elif str(full_path).split('.')[-1] == str("out"):
+    elif os.path.splitext(full_path)[1] == str(".out"):
         tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
-    elif str(full_path).split('.')[-1] == str("bam"):
+    elif os.path.splitext(full_path)[1] == str(".bam"):
         try:
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
             # tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
@@ -213,9 +212,9 @@ def processFile(full_path, tmpSampleDict):
             tmpSampleDict['files'] = list()
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
 # Not sure if these still work 
-    elif str(full_path).split('.')[-1].lower() == str("maf"):
+    elif os.path.splitext(full_path)[1].lower() == str(".maf"):
         tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
-    elif str(full_path).split('.')[-1].lower() == str("gvf"):
+    elif os.path.splitext(full_path)[1].lower() == str(".gvf"):
         tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
     else:
         # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
@@ -239,7 +238,7 @@ def parseAndValidateRegions(regions, json_config=False):
         print("== Parsing and Validating Regions ==")
     for i in unique_region_list:
         # the parse
-        if str(i.split('.')[-1]).lower() == "bed":
+        if os.path.splitext(i)[1].lower() == ".bed":
             # this is a bed file of regions
             # it will be parsed in the main python script
             if os.path.isfile(str(i)):
@@ -325,7 +324,6 @@ def getJSONDict(args):
         else:
             # sample name is not blank line
             samples.append(sid)
-
     for sid in samples:
         # walk over the input project directory (or CWD if none defined) to find all files with sample ID in the name
         tmpSampleDict = defaultdict()
@@ -344,13 +342,14 @@ def getJSONDict(args):
         if args['inputs']:
             for fn in args['inputs']:
                 full_path = os.path.abspath(fn)
-                if str(fn).split('.')[-1] == str("bam"):
+                if os.path.splitext(fn)[1] == str(".bam"):
                     if re.search(r"\b" + re.escape(sid) + r"\b", fn):
                         tmpSampleDict = processFile(full_path, tmpSampleDict)
                 varReader = HTSeq.VCF_Reader(str(fn))
                 varReader.parse_meta() # extract list of sample names in VCF header
                 if sid in set(varReader.sampleids): 
                     tmpSampleDict = processFile(full_path, tmpSampleDict)
+        #stop()
         # uniquify the list of files associated with the sample, in case they were supplied directly via (-i) and found while directory crawling (-d)
         tmpSampleDict['files'] =  { v['path']:v for v in tmpSampleDict['files']}.values()
         json_dict['samples'].append(tmpSampleDict)
