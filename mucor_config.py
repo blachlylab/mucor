@@ -463,11 +463,12 @@ def main():
 
     # Construct JSON dictionary and dump it to the config file
     json_dict = getJSONDict(args)
-    missing_file_paths = filesWithoutSamples(json_dict, args['inputs']) 
-    if missing_file_paths:
-        throwWarning("Some input files were not associated with any sample name")
-        for fn in missing_file_paths:
-            print(fn)
+    if args['inputs']:
+        missing_file_paths = filesWithoutSamples(json_dict, args['inputs']) 
+        if missing_file_paths:
+            throwWarning("Some input files were not associated with any sample name")
+            for fn in missing_file_paths:
+                print(fn)
     if inconsistentFilesPerSample(json_dict):
         throwWarning("Inconsistent number of files per sample")
         print("File #\tSample ID")
