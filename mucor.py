@@ -44,15 +44,16 @@ import pandas as pd
 import HTSeq
 
 # optional modules
+# will throw warnings later in the program 
 try:
     import tabix
 except ImportError:
-    print("Tabix module not found; database features disabled")
+    pass
 
 try:
     import xlsxwriter
 except ImportError:
-    print("XlsxWriter module not found; excel output disabled")
+    pass
 
 # mucor modules
 import mucorfilters as mf
@@ -156,7 +157,10 @@ def parseJSON(json_config):
     config.gff = JD['gff']
     config.outputFormats = list(set(JD['outputFormats'])) # 'set' prevents repeated formats from being written multiple times
     if JD['databases']:
-        config.databases = JD['databases']
+        if 'tabix' in sys.modules: # make sure tabix is imported 
+            config.databases = JD['databases']
+        else: # the user supplied databases but did not successfully import tabix
+            print("Tabix module not found; database features disabled")
     if str(JD['regions']):
         config.regions = JD['regions']
     else:
@@ -588,6 +592,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     varDF.loc[ varDF.feature == '', 'feature'] = 'NO_FEATURE'
     
     # replace all remaining blank cells with '?'
+
+    #stop() # this command throws a warning
     varDF.replace('', '?', inplace=True)
 
     return varDF, knownFeatures, gas 
@@ -599,19 +605,17 @@ def printOutput(config, outputDirName, varDF):
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     ow = output.Writer()
     # identify formats ending in 'xlsx' as the "excel formats," requiring XlsxWriter
-    excel_formats = [ plugin_name for plugin_name,file_name in ow.file_names.items() if os.path.splitext(file_name)[1]=="xlsx" ]
+    excel_formats = [ plugin_name for plugin_name,file_name in ow.file_names.items() if os.path.splitext(file_name)[1]==".xlsx" ]
     if "all" in config.outputFormats:
         # replace output type 'all' with a lsit of all supported output types
         #    and remove 'all' and 'default' to prevent recursive execution of the modules
         config.outputFormats = ow.supported_formats.keys()
         config.outputFormats.remove('all')
         config.outputFormats.remove('default')
-    try:
-        import xlsxwriter
-        # if this runs okay, config.outputFormats will remain intact 
-    except ImportError:
-        # skip output types that write excel files 
-        config.outputFormats = [ x for x in config.outputFormats if x not in excel_formats ]
+        if 'xlsxwriter' not in sys.modules and excel_formats:
+            # if xlsxwriter is not present and the user selected excel output formats, remove excel formats from output formats
+            config.outputFormats = [ x for x in config.outputFormats if x not in excel_formats ]
+            throwWarning("xlsxwriter module not found; Excel outputs disabled")
 
     for format in config.outputFormats:
         ow.write(varDF,format,outputDirName,config)
@@ -621,6 +625,9 @@ def printOutput(config, outputDirName, varDF):
     return 0
 
 def main():
+    for (optional_module, feature) in [ ('tabix','database features'),('xlsxwriter','Excel outputs')]:
+        if optional_module not in sys.modules:
+            print("{0} module not found; {1} disabled".format(optional_module, feature))
     print(Info.logo)
     print(Info.versionInfo)
 

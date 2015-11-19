@@ -160,7 +160,7 @@ class Writer(object):
         # change capitalization for consistency 
         out.index.names = ['FeatureName']
 
-        out.sort().to_csv(ofCounts, sep='\t', na_rep='?', index=True)
+        mySort(out).to_csv(ofCounts, sep='\t', na_rep='?', index=True)
         print("\t{0}: {1} rows".format(ofCounts.name, len(out)))        
         return True 
 
@@ -281,11 +281,11 @@ class Writer(object):
 
         if txt:
             # print the new, collapsed dataframe to a file
-            out.sort(['feature','pos']).to_csv(ofVariantDetailsTXT, sep='\t', na_rep='?', index=False)
+            mySort(out, ['feature','pos']).to_csv(ofVariantDetailsTXT, sep='\t', na_rep='?', index=False)
             print("\t{0}: {1} rows".format(ofVariantDetailsTXT.name, len(out)))
         if xls:
             # print the new, collapsed dataframe to file a
-            out.sort(['feature','pos']).to_excel(ofVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
+            mySort(out, ['feature','pos']).to_excel(ofVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
             ofVariantDetailsXLS.save()
             print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(out)))
 
@@ -322,14 +322,14 @@ class Writer(object):
             if longtxt:
                 outputFileName = self.file_names['longtxt']
                 ofLongVariantDetailsTXT = open(outputDirName + "/" + outputFileName, 'w+')
-                varDF.sort(['feature','pos']).to_csv(ofLongVariantDetailsTXT, sep='\t', na_rep='?', index=False)
+                mySort(varDF, ['feature','pos']).to_csv(ofLongVariantDetailsTXT, sep='\t', na_rep='?', index=False)
                 ofLongVariantDetailsTXT.close()
                 print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
                     
             if longxls:
                 outputFileName = self.file_names['longxls']
                 ofLongVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
-                varDF.sort(['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
+                mySort(varDF, ['feature','pos']).to_excel(ofLongVariantDetailsXLS, 'Long Variant Details', na_rep='?', index=False)
                 ofLongVariantDetailsXLS.save()
                 print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(varDF)))
         except IOError:
@@ -354,7 +354,7 @@ class Writer(object):
         
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
         out = grouped.apply(collapseVariantBed)
-        out.sort(['chr','start']).to_csv(ofVariantBeds, sep='\t', na_rep='?', index=False, header=False)
+        mySort(out, ['chr','start']).to_csv(ofVariantBeds, sep='\t', na_rep='?', index=False, header=False)
         ofVariantBeds.close()
         print("\t{0}: {1} rows".format(ofVariantBeds.name, len(out)))
         return True
@@ -493,3 +493,17 @@ def collapseVCF(group):
             info += str(feat) + " vf=" + vf + " dp=" + dp + "; "
     return pd.DataFrame(dict(zip(vcf_fields,[chrom, pos, none, ref, alt, none, none, info])), columns=vcf_fields)
 
+def mySort(df, columns=None):
+    '''
+    A wrapper for pandas.DataFrame sort that is agnostic about which version of pandas is used 
+    '''
+    version = float(".".join(str(pd.__version__).split('.')[0:2]))
+    if version >= float(0.17):
+        if columns:
+            #sort by columns
+            return df.sort_values(by=columns)
+        else:
+            #sort by index
+            return df.sort_index()
+    else:
+        return df.sort(columns=columns)
