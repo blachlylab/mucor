@@ -625,9 +625,6 @@ def printOutput(config, outputDirName, varDF):
     return 0
 
 def main():
-    for (optional_module, feature) in [ ('tabix','database features'),('xlsxwriter','Excel outputs')]:
-        if optional_module not in sys.modules:
-            print("{0} module not found; {1} disabled".format(optional_module, feature))
     print(Info.logo)
     print(Info.versionInfo)
 
