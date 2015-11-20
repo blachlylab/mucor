@@ -289,7 +289,7 @@ def getJSONDict(args):
     json_dict['samples'] = list(dict())
 
     # VCF filters
-    outFilters = set(["PASS"]) # By default, all mutations marked as PASS are permitted
+    outFilters = set(["PASS", "."]) # By default, all mutations marked as PASS and '.' are permitted
     for i in str(args['vcf_filters']).split(','):
         if i:
             outFilters.add(i) # Add all user-defined vcf filters. VCFs with empty 'FILTER' columns must have '.' supplied here, or all mutations will be filtered out
