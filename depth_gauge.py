@@ -34,7 +34,6 @@ import itertools
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-from pdb import set_trace as stop 
 import json
 
 # nonstandard modules

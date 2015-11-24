@@ -22,7 +22,6 @@ import sys
 import os
 from variant import Variant
 import numpy as np
-from pdb import set_trace as stop
 
 def throwWarning(message, help = False):
     print("*** WARNING: " + message + " ***")

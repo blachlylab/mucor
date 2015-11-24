@@ -30,9 +30,12 @@ import argparse
 from collections import defaultdict
 import csv
 import json
-from pdb import set_trace as stop
 import codecs
-import HTSeq
+try:
+    import HTSeq
+except ImportError as err:
+    print(str(err) + ". This module is required.")
+    sys.exit()
 
 # mucor modules
 from inputs import Parser 
@@ -349,7 +352,6 @@ def getJSONDict(args):
                 varReader.parse_meta() # extract list of sample names in VCF header
                 if sid in set(varReader.sampleids): 
                     tmpSampleDict = processFile(full_path, tmpSampleDict)
-        #stop()
         # uniquify the list of files associated with the sample, in case they were supplied directly via (-i) and found while directory crawling (-d)
         tmpSampleDict['files'] =  { v['path']:v for v in tmpSampleDict['files']}.values()
         json_dict['samples'].append(tmpSampleDict)

@@ -35,13 +35,24 @@ import itertools
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-from pdb import set_trace as stop                             # Needed for pdb.set_trace()
 import json
 
-# nonstandard modules
-import numpy as np
-import pandas as pd
-import HTSeq
+# nonstandard, required modules
+try:
+    import numpy as np
+except ImportError as err:
+    print(str(err) + ". This module is required.")
+    sys.exit()
+try:
+    import pandas as pd
+except ImportError as err:
+    print(str(err) + ". This module is required.")
+    sys.exit()
+try:
+    import HTSeq
+except ImportError as err:
+    print(str(err) + ". This module is required.")
+    sys.exit()
 
 # optional modules
 # will throw warnings later in the program 
@@ -160,7 +171,7 @@ def parseJSON(json_config):
         if 'tabix' in sys.modules: # make sure tabix is imported 
             config.databases = JD['databases']
         else: # the user supplied databases but did not successfully import tabix
-            print("Tabix module not found; database features disabled")
+            throwWarning("tabix module not found; database features disabled")
     if str(JD['regions']):
         config.regions = JD['regions']
     else:

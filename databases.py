@@ -23,7 +23,6 @@
 # 6k Exomes
 # COSMIC
 import gzip
-import pdb
 from collections import defaultdict
 import time
 import os

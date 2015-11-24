@@ -24,7 +24,6 @@ import os
 import pandas as pd
 from config import Config
 import numpy as np
-from pdb import set_trace as stop
 import time
 from info import Info
 
