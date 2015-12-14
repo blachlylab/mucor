@@ -354,14 +354,18 @@ def castList(list_or_string):
 
 def parse_EFC(INFO):
     # attempt to extract 'effect' and 'functional consequence' from the VCF line
-    effect = ""
-    fc = ""
+    effect = "" # e.g. E123K
+    fc = ""     # e.g. SYNONYMOUS_CODING
     # check for snpeff annotation first
     if 'EFF' in INFO:
         castList(INFO['EFF'])
         fc = ";".join([x for x in set([ x.split('(')[0] for x in castList(INFO['EFF']) ])])
         effect = ";".join([x for x in set([ x.split('|')[3] for x in castList(INFO['EFF']) if x.split('|')[3] ])])
-
+    # check for newer type of snpeff notation
+    elif 'ANN' in INFO:
+        castList(INFO['ANN'])
+        fc = ";".join([x for x in set([ x.split('|')[1] for x in castList(INFO['ANN']) ])])
+        effect = ";".join([x for x in set([ x.split('|')[9] for x in castList(INFO['ANN']) ])])
     # if the MiSeq software reported functional consequence and effect and the file is not snpEff anotated, the MiSeq annotations will be used instead
     elif 'FC' in INFO:
         fc  = ";".join([x for x in set( [y.split('_')[0] for y in castList(INFO['FC'])] )])
