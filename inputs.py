@@ -243,6 +243,11 @@ class Parser(object):
                 vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
             except KeyError:
                 pass
+            except ZeroDivisionError:
+                if dp == 0 and alt_count == 0 and ref_count == 0:
+                    # This was called, but is not covered 
+                    vf = 0
+
             out[sample] = (dp, vf)
         return out
 
