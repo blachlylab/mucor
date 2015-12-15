@@ -42,6 +42,37 @@ class KnownVariant:
         self.alt = alt          # alternate allele
         self.rs = rs            # RS number
 
+def checkAndOpen(db):
+    if 'tabix' not in sys.modules:
+        return None
+
+    db = os.path.expanduser(db)
+    if not os.path.exists(db):
+        pass
+    else:
+        # 'source' is a variable used to title the column in the output
+        # it is defined by the user in the configuration script step when generating the JSON file
+        if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
+            try:
+                database = gzip.open(db)
+            except IOError:
+                print("WARNING: could not open {}".format(db))
+                return None
+        elif os.path.splitext(db)[1] == ".vcf":
+            abortWithMessage("Error: database file {0} must compressed with bgzip".format(db))
+        elif os.path.splitext(db)[1] == ".gz" and not os.path.exists(db + ".tbi"):
+            abortWithMessage("Compressed database is not tabix indexed")
+        else: abortWithMessage("Error opening database files: {0}".format(db))
+        
+        try:
+            row = database.readline()
+        except StopIteration: 
+            print("Empty file {}".format(db))
+            return None
+
+        tb = tabix.open(db)
+        return tb
+
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
     exit(2)
@@ -56,16 +87,14 @@ def dbLookup(var, dbs):
         Better than '' when printing output // TO DO: consider '.' or removal entirely
     '''
 
-    if 'tabix' not in sys.modules:
-        return False, str('disabled')
-
     spos = int(var.pos.pos - 1)     # start position
     epos = int(var.pos.pos)         # end position
 
     dbEntries = {}
     dbVAFs = {}
 
-    for source, db in dbs.items():
+    for source, tb in dbs.items():
+        '''
         db = os.path.expanduser(db)
         if not os.path.exists(db):
             pass
@@ -91,32 +120,33 @@ def dbLookup(var, dbs):
 
             # perform the database query 
             tb = tabix.open(db)
-            if len(str(var.alt).split(',')) >= 1:
-                dbEntries[source] = '?'
-                dbVAFs[source] = '?'
-                try:
-                    for row in tb.query(var.pos.chrom, spos, epos):
-                        if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
-                            # 3rd column (zero indexed = [2])
-                            # in a VCF is the ID
-                            ID = row[2]
+            '''
+        if len(str(var.alt).split(',')) >= 1:
+            dbEntries[source] = '?'
+            dbVAFs[source] = '?'
+            try:
+                for row in tb.query(var.pos.chrom, spos, epos):
+                    if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
+                        # 3rd column (zero indexed = [2])
+                        # in a VCF is the ID
+                        ID = row[2]
 
-                            # check for known population allele frequencies in the database VCF
-                            if "AF=" in row[7]:
-                                for item in row[7].split(';'):
-                                    if item.startswith('AF='):
-                                        dbVAFs[source] = float(item.split('=')[1])
-                                        break
+                        # check for known population allele frequencies in the database VCF
+                        if "AF=" in row[7]:
+                            for item in row[7].split(';'):
+                                if item.startswith('AF='):
+                                    dbVAFs[source] = float(item.split('=')[1])
+                                    break
 
-                            if ID == ".":
-                                # a '.' indicates it is annotated, but no RS number. 
-                                # different from a '?', which indicates not-annotated
-                                # this is more clear
-                                ID = "PRESENT"
-                            dbEntries[source] = ID
-                            
-                except tabix.TabixError:
-                    pass
-                    #there are no mutations on this variant's contig, in this particular database 
+                        if ID == ".":
+                            # a '.' indicates it is annotated, but no RS number. 
+                            # different from a '?', which indicates not-annotated
+                            # this is more clear
+                            ID = "PRESENT"
+                        dbEntries[source] = ID
+                        
+            except tabix.TabixError:
+                pass
+                #there are no mutations on this variant's contig, in this particular database 
                         
     return dbEntries, dbVAFs

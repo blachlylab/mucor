@@ -73,7 +73,7 @@ from mucorfeature import MucorFeature
 import inputs
 import output
 from config import Config
-from databases import dbLookup 
+from databases import dbLookup,checkAndOpen 
 from info import Info
 
 def abortWithMessage(message):
@@ -169,7 +169,11 @@ def parseJSON(json_config):
     config.outputFormats = list(set(JD['outputFormats'])) # 'set' prevents repeated formats from being written multiple times
     if JD['databases']:
         if 'tabix' in sys.modules: # make sure tabix is imported 
-            config.databases = JD['databases']
+            for name,db in JD['databases'].items():
+                dbPointer = checkAndOpen(db)
+                if dbPointer:
+                    #check for non-null pointers
+                    config.databases[name] = dbPointer
         else: # the user supplied databases but did not successfully import tabix
             throwWarning("tabix module not found; database features disabled")
     if str(JD['regions']):
