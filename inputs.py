@@ -51,7 +51,7 @@ class Parser(object):
                                         "HaplotypeCaller":self.parse_HapCaller,
                                         "FreeBayes":self.parse_FreeBayes,
                                         "GenericGATK":self.parse_GenericGATK,
-                                        "GenericINFO":self.parse_GenericINFO }
+                                        "INFOCol":self.parse_INFO_Column }
 
     def parse(self, row, source):
         self.source = source
@@ -305,7 +305,7 @@ class Parser(object):
             out[sample] = (dp, vf) 
         return out
 
-    def parse_GenericINFO(self, samples):
+    def parse_INFO_Column(self, samples):
         '''
         Generic VCF parser which extracts allele frequency and depth from the INFO field, rather than the SAMPLE field associated with a specific sample. May be useful for cases in which aggregate VAF and DP are more interesting than per-sample metrics, or when aggregate values are available and per-sample values are not.
         Input: 
