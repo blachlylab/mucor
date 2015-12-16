@@ -408,7 +408,7 @@ def main():
     parser.add_argument("-d", "--project_directory", metavar='<dirname>', required=False, help="Working/project directory, in which to find input variant call files.")
     parser.add_argument("-vcff", "--vcf_filters", default='', help="Comma separated list of VCF filters to allow. Default: PASS") # the defualt value is applied later on in the getJSONDict function, not here.
     parser.add_argument("-a", "--archive_directory", default="", help="Specify directory in which to read/write archived annotations. Undeclared will prevent using the annotation archive features.")
-    parser.add_argument("-r", "--regions", default='', help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
+    parser.add_argument("-r", "--regions", default=[], help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
     parser.add_argument("-i", "--inputs", nargs="+", help="Input files")
     parser.add_argument("-u", "--union", action="store_true", help="""
         Join all items with same ID for feature_type (specified by -f)
