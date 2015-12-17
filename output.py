@@ -26,6 +26,7 @@ from config import Config
 import numpy as np
 import time
 from info import Info
+from pdb import set_trace as stop
 
 from mucor import abortWithMessage
 from mucor import throwWarning
@@ -272,11 +273,15 @@ class Writer(object):
                 ofVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
         except IOError:
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
-        
-        # Group by (chr, pos, ref, alt, feature)
-        grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
-        # apply collapsing function to each pandas group
-        out = grouped.apply(collapseVariantDetails)
+        if txt or xls:
+            # Group by (chr, pos, ref, alt, feature)
+            grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature'])
+            # apply collapsing function to each pandas group
+            outSeries = grouped.apply(collapseVariantDetails)
+            out = pd.DataFrame(outSeries.reset_index(drop=True), columns=varDF.columns)
+
+            #outSeries = grouped.apply(collapseVariantDetails)
+            #out = pd.DataFrame(outSeries.reset_index(drop=True), columns=varDF.columns)
 
         if txt:
             # print the new, collapsed dataframe to a file
@@ -352,7 +357,8 @@ class Writer(object):
             abortWithMessage("Error opening output file {0}/{1}".format(outputDirName, outputFileName))
         
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
-        out = grouped.apply(collapseVariantBed)
+        outSeries = grouped.apply(collapseVariantBed)
+        out = pd.DataFrame(outSeries.reset_index(drop=True))
         mySort(out, ['chr','start']).to_csv(ofVariantBeds, sep='\t', na_rep='?', index=False, header=False)
         ofVariantBeds.close()
         print("\t{0}: {1} rows".format(ofVariantBeds.name, len(out)))
@@ -377,7 +383,13 @@ class Writer(object):
         ofVariantVCF.write("##fileformat=VCFv4.1\n")
         
         grouped = varDF.groupby(['chr', 'pos', 'ref', 'alt'])
-        out = grouped.apply(collapseVCF)
+        vcf_fields = ['chr','pos','id','ref','alt','qual','filter','INFO']  # the relevant fields for a vcf file
+        outSeries = grouped.apply(collapseVCF)                           # make the INFO column for this set of samples
+        outDF = pd.DataFrame(outSeries, columns=['INFO'])
+        varDF = varDF.merge(outDF, left_on=['chr','pos','ref','alt'], right_index=True) # add the info column to the original dataframe
+        out = varDF.reindex(columns=vcf_fields).fillna('.')                 # drop the columns that are unrelated to vcf format, while reordering columns into proper vcf order
+        official_vcf_fields = ['#CHROM','POS','ID', 'REF','ALT', 'QUAL', 'FILTER','INFO']   
+        out.columns = pd.Index(official_vcf_fields)                         # rename columns to comply with official vcf standards
         out.to_csv(ofVariantVCF, sep='\t', na_rep='?', index=False, header=True, sparsify=False)
         ofVariantVCF.close()
         print("\t{0}: {1} rows".format(ofVariantVCF.name, len(out)))
@@ -410,7 +422,8 @@ class Writer(object):
 
 
 ############################################
-#     V     support functions      V       #
+#     |     support functions      |       #
+#     V                            V       #
 # do not write output, but used by writers #
 ############################################
 
@@ -435,17 +448,19 @@ def collapseVariantDetails(group):
             #outvals.append( outstring[:-2] )  # string based          # trim the extra ', ' off the end of outstring 
             outvals.append(", ".join(outlist))
         else:
-            if len(group[column].unique()) > 1:
+            if len(group[column].unique()) == 1:
+                outvals.append( group[column].unique()[0] ) # only 1 value; extract it since there's no need to preserve the array type
+            else:
+                #this should be pretty rare, such as inputting two files for the same sample that were annotated for functional consequence by two different tools
                 outvals.append( "/".join(filter(bool, [x for x in group[column].unique() if x != '?' ] )) )  # functional consequence and effect should only be 1 value as well, but may not be if there is a mixture of annotated and unannotated vcf files. 
                                                                     # This sorts the effects and consequences, and concatenates the values that are not '?'s.
                                                                     # each of the appended values must be an array in order to transform dictionary to pandas data frame in the next line
-            else:
-                outvals.append( group[column].unique() )
     try:                                                           
-        outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
+        #outDF = pd.DataFrame( dict(zip(columns,outvals)), columns=columns )
+        outD = pd.Series( dict(zip(columns,outvals)) )
     except ValueError:
         abortWithMessage("Could not collapse variant {0} {1} {2}/{3} into a single row. \n\t\tThis mutation may have inconsistent effect and/or functional consequence values in different VCF files.".format( str(group['chr'].unique()[0]), str(group['pos'].unique()[0]), str(group['ref'].unique()[0]), str(group['alt'].unique()[0]) ))
-    return outDF
+    return outD
 
 def collapseVariantBed(group):
     '''
@@ -455,15 +470,15 @@ def collapseVariantBed(group):
     Output: a pandas dataframe object, ready to be written to bed format
     '''
     bed_fields = ['chr','start','end','name']
-    chrom = group['chr'].unique()
-    pos = group['pos'].unique()
+    chrom = group['chr'].unique()[0]
+    pos = group['pos'].unique()[0]
     start = pos - 1     # bed files are 0-based positions
     end = pos
     name = ";".join(set(group['feature'].values))   # mutations that fall in overlapping features will have a name column with multiple values delimited by semicolons
-    return pd.DataFrame( dict( zip(     \
+    return pd.Series( dict( zip(     \
         ['chr','start','end','name'],   \
         [chrom, start , end , name]     \
-        )), columns=bed_fields)
+        ))) # , columns=bed_fields
 
 def collapseVCF(group):
     '''
@@ -471,26 +486,22 @@ def collapseVCF(group):
     Collapses variant rows that share the same contig, position, ref allele, and alt allele
     Input: a pandas groupby object
     Output: a pandas dataframe object, ready to be written to vcf format 
+
+    TODO: make this output a (multi-)sample vcf, i.e. each sample in its own column
     '''
-    chrom = group['chr'].unique()
-    pos = group['pos'].unique()
-    ref = group['ref'].unique()
-    alt = group['alt'].unique()
-    none = np.array(['.'], dtype=object) # numpy array object for blank columns, such as ID, QUAL, and FILTER
     info = '' # output will have sample-specific information in the 'info' column
-    vcf_fields = ['#CHROM','POS','ID', 'REF','ALT', 'QUAL', 'FILTER','INFO']  # standard VCF header
     samples = group['sample'].unique()
     for sample in samples:
         info += str(sample) + ':'
-        for feat in group[group['sample'] == sample]['feature'].values:
-            #line = group[ (group.sample == sample) & (group.feature == feat) ]
-            # pandas 0.16.1 added pandas.DataFrame.sample() which breaks
-            # a query of form df.sample ==
-            line = group.query('(sample == @sample) and (feature == @feat)', engine='python') 
-            vf = str(line['vf'].values[0])
-            dp = str(line['dp'].values[0])
-            info += str(feat) + " vf=" + vf + " dp=" + dp + "; "
-    return pd.DataFrame(dict(zip(vcf_fields,[chrom, pos, none, ref, alt, none, none, info])), columns=vcf_fields)
+        feat = "/".join(group[group['sample'] == sample]['feature'].unique())
+        lines = group[ (group['sample'] == sample) ]
+        # pandas 0.16.1 added pandas.DataFrame.sample() which breaks
+        # a query of form df.sample ==
+        #line = group.query('(sample == @sample) and (feature == @feat)', engine='python') 
+        vf = str(lines['vf'].unique()[0])
+        dp = str(lines['dp'].unique()[0])
+        info += str(feat) + ",vf=" + vf + ",dp=" + dp + ";"
+    return info 
 
 def mySort(df, columns=None):
     '''

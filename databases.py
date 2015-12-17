@@ -89,44 +89,16 @@ def dbLookup(var, dbs):
 
     spos = int(var.pos.pos - 1)     # start position
     epos = int(var.pos.pos)         # end position
-
+    alts = str(var.alt).split(',')  # list of 1 or more alternative alleles 
     dbEntries = {}
-    dbVAFs = {}
 
     for source, tb in dbs.items():
-        '''
-        db = os.path.expanduser(db)
-        if not os.path.exists(db):
-            pass
-        else:
-            # 'source' is a variable used to title the column in the output
-            # it is defined by the user in the configuration script step when generating the JSON file
-            if os.path.splitext(db)[1] == ".gz" and os.path.exists(db + ".tbi"):
-                try:
-                    database = gzip.open(db)
-                except IOError:
-                    print("WARNING: could not open {}".format(db))
-                    continue
-            elif os.path.splitext(db)[1] == ".vcf":
-                abortWithMessage("Error: database file {0} must compressed with bgzip".format(db))
-            elif os.path.splitext(db)[1] == ".gz" and not os.path.exists(db + ".tbi"):
-                abortWithMessage("Compressed database is not tabix indexed")
-            else: abortWithMessage("Error opening database files: {0}".format(db))
-            
-            try:
-                row = database.readline()
-            except StopIteration: 
-                print("Empty file {}".format(db))
-
-            # perform the database query 
-            tb = tabix.open(db)
-            '''
-        if len(str(var.alt).split(',')) >= 1:
+        if len(alts) >= 1:
             dbEntries[source] = '?'
-            dbVAFs[source] = '?'
+            dbEntries[source + "_VAF"] = '?'
             try:
                 for row in tb.query(var.pos.chrom, spos, epos):
-                    if str(row[3]) == var.ref and str(row[4]) in str(var.alt).split(','):
+                    if str(row[3]) == var.ref and str(row[4]) in alts:
                         # 3rd column (zero indexed = [2])
                         # in a VCF is the ID
                         ID = row[2]
@@ -135,7 +107,7 @@ def dbLookup(var, dbs):
                         if "AF=" in row[7]:
                             for item in row[7].split(';'):
                                 if item.startswith('AF='):
-                                    dbVAFs[source] = float(item.split('=')[1])
+                                    dbEntries[source + "_VAF"] = float(item.split('=')[1])
                                     break
 
                         if ID == ".":
@@ -149,4 +121,4 @@ def dbLookup(var, dbs):
                 pass
                 #there are no mutations on this variant's contig, in this particular database 
                         
-    return dbEntries, dbVAFs
+    return dbEntries

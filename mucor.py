@@ -37,6 +37,9 @@ import gzip
 import cPickle as pickle
 import json
 
+from pdb import set_trace as stop
+import profile
+
 # nonstandard, required modules
 try:
     import numpy as np
@@ -346,11 +349,14 @@ def skipThisIndel(var, knownFeatures, featureName):
         Ex: ref/alt: A/AT compared to ref/alt: ATT/ATTT
         The refs and the alts are different, but both mutations represent the same T insertion
     '''
-    if len(var.ref) != len(var.alt): # confirm that this mutation is an indel, not a snv
-        for kvar in knownFeatures[featureName].variants: # "kvar" stands for "known variant"
-            if kvar.pos.pos == var.pos.pos and kvar.pos.chrom == var.pos.chrom and ( kvar.ref != var.ref or kvar.alt != var.alt ) and str(indelDelta(var.ref,var.alt)[0]) == str(indelDelta(kvar.ref, kvar.alt)[0]) and str(indelDelta(var.ref,var.alt)[1]) == str(indelDelta(kvar.ref, kvar.alt)[1]):
-                return (kvar.ref, kvar.alt)
-                break
+    
+    for kvar in knownFeatures[featureName].variants: # "kvar" stands for "known variant"
+        if kvar.pos.pos == var.pos.pos and kvar.pos.chrom == var.pos.chrom and \
+        ( kvar.ref != var.ref or kvar.alt != var.alt ) and \
+        indelDelta(var.ref,var.alt)[0] == indelDelta(kvar.ref, kvar.alt)[0] and \
+        indelDelta(var.ref,var.alt)[1] == indelDelta(kvar.ref, kvar.alt)[1]:
+            return (kvar.ref, kvar.alt)
+            break
     return tuple()
 
 def indelDelta(ref, alt):
@@ -368,9 +374,9 @@ def groupCount(grp):
     function to count the number of samples that share the same mutation
     Input: Acts on a pandas groupby object
     Oputput: returns a DataFrame
+    DEPRICATED: This has been reduced to a faster lambda function 
     '''
-    grp['count'] = len(grp['sample'].unique())
-    return grp
+    return len(grp['sample'].unique())
 
 def annotateDF(grp, databases):
     '''
@@ -381,11 +387,8 @@ def annotateDF(grp, databases):
     ref = grp['ref'].unique()[0]
     alt = grp['alt'].unique()[0]
     var = Variant(source=None, sample=None, pos=HTSeq.GenomicPosition(chrom, pos), ref=ref, alt=alt, frac=None, dp=None, eff=None, fc=None)
-    dbEntries, dbVAFs = dbLookup(var, databases)
-    for source, annot in dbEntries.items():
-        grp.insert(len(grp.columns)-4, source, annot)
-        grp.insert(len(grp.columns)-4, source + "_VAF", dbVAFs[source])
-    return grp
+    dbEntries = dbLookup(var, databases)
+    return pd.Series(dbEntries)
 
 def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations):
     '''
@@ -403,12 +406,13 @@ def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unr
    
     if resultSet:
         for featureName in resultSet:
-            kvar = skipThisIndel(var, knownFeatures, featureName)
-            if bool(kvar):
-                # Sanity check to see what indels are being overwritten by existing vars
-                var.ref = kvar[0]
-                var.alt = kvar[1]
-            knownFeatures[featureName].variants.add(var)
+            if len(var.ref) != len(var.alt): # confirm that this mutation is an indel, not a snp
+                kvar = skipThisIndel(var, knownFeatures, featureName)
+                if bool(kvar):
+                    # Sanity check to see what indels are being overwritten by existing vars
+                    var.ref = kvar[0]
+                    var.alt = kvar[1]
+                knownFeatures[featureName].variants.add(var)
     
     # Descriptive variable names
     chr = var.pos.chrom
@@ -580,18 +584,24 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
     if databases:
         print("\n=== Comparing Your Variants to Known VCF Databases ===")
         startTime = time.clock()
-        varDF = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature']).apply( annotateDF, databases=databases )
+        annotSeries = varDF.groupby(['chr', 'pos', 'ref', 'alt']).apply( annotateDF, databases=databases )
+        annotDF = pd.DataFrame(annotSeries)
+        new_index = pd.Index([x for x in varDF.columns[:-4]] + [x for x in annotDF.columns] + [x for x in varDF.columns[-4:]])
+        varDF = varDF.merge(annotDF, left_on=["chr", "pos", "ref", "alt"], right_index=True)[new_index]
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}".format(int(totalTime/60), int(totalTime % 60)))
-    
+
     # Delete VAF columns from databases that do not have population variant allele frequencies recorded
     # These will manifest as a whole VAF column full of '?' 
     for column in varDF.keys():
         if "_VAF" in str(column) and len(set(varDF[column])) == 1:
             varDF.drop(column, axis=1, inplace=True)
-    
+ 
     # Dataframe operation to count the number of samples that exhibit each mutation
-    varDF = varDF.groupby(['chr', 'pos', 'ref', 'alt', 'feature']).apply(groupCount)
+    countSeries = varDF.groupby(['chr', 'pos', 'alt']).apply(lambda x: len(set(x['sample'])))
+    countDF = pd.DataFrame(countSeries, columns=['count'])
+    # This appears messy, but runs very fast regardless. It maps the grouped count dataframe back to the variant dataframe 
+    varDF['count'] = varDF[['chr','pos','alt']].merge(countDF, left_on=['chr','pos','alt'], right_index=True)['count']
     # Divide the count for each row in varDF by the total sample count from the JSON config file. Represents the percent of the input samples that exhibit each mutation.
     freqdict = {}
     for i in set(varDF['count'].values):
@@ -673,6 +683,8 @@ def main():
     total = len(set(config.samples))
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast, config.union)
+    #stop()
+    #profile.runctx('parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)', {}, {"config": config, "knownFeatures":knownFeatures, "gas": gas, "config.databases": config.databases, "config.filters": config.filters, "config.regions": config.regions, "total":total, "parseVariantFiles":parseVariantFiles })
 
     varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
     printOutput(config, str(config.outputDir), varDF)
