@@ -37,9 +37,6 @@ import gzip
 import cPickle as pickle
 import json
 
-from pdb import set_trace as stop
-import profile
-
 # nonstandard, required modules
 try:
     import numpy as np
@@ -683,9 +680,6 @@ def main():
     total = len(set(config.samples))
 
     knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast, config.union)
-    #stop()
-    #profile.runctx('parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)', {}, {"config": config, "knownFeatures":knownFeatures, "gas": gas, "config.databases": config.databases, "config.filters": config.filters, "config.regions": config.regions, "total":total, "parseVariantFiles":parseVariantFiles })
-
     varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
     printOutput(config, str(config.outputDir), varDF)
     

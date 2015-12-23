@@ -26,7 +26,6 @@ from config import Config
 import numpy as np
 import time
 from info import Info
-from pdb import set_trace as stop
 
 from mucor import abortWithMessage
 from mucor import throwWarning
