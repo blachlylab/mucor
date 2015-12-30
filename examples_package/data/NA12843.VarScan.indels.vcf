@@ -1,0 +1,42 @@
+##fileformat=VCFv4.1
+##source=VarScan2
+##INFO=<ID=ADP,Number=1,Type=Integer,Description="Average per-sample depth of bases with Phred score >= 15">
+##INFO=<ID=WT,Number=1,Type=Integer,Description="Number of samples called reference (wild-type)">
+##INFO=<ID=HET,Number=1,Type=Integer,Description="Number of samples called heterozygous-variant">
+##INFO=<ID=HOM,Number=1,Type=Integer,Description="Number of samples called homozygous-variant">
+##INFO=<ID=NC,Number=1,Type=Integer,Description="Number of samples not called">
+##FILTER=<ID=str10,Description="Less than 10% or more than 90% of variant supporting reads on one strand">
+##FILTER=<ID=indelError,Description="Likely artifact due to indel reads at this position">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=SDP,Number=1,Type=Integer,Description="Raw Read Depth as reported by SAMtools">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Quality Read Depth of bases with Phred score >= 15">
+##FORMAT=<ID=RD,Number=1,Type=Integer,Description="Depth of reference-supporting bases (reads1)">
+##FORMAT=<ID=AD,Number=1,Type=Integer,Description="Depth of variant-supporting bases (reads2)">
+##FORMAT=<ID=FREQ,Number=1,Type=String,Description="Variant allele frequency">
+##FORMAT=<ID=PVAL,Number=1,Type=String,Description="P-value from Fisher's Exact Test">
+##FORMAT=<ID=RBQ,Number=1,Type=Integer,Description="Average quality of reference-supporting bases (qual1)">
+##FORMAT=<ID=ABQ,Number=1,Type=Integer,Description="Average quality of variant-supporting bases (qual2)">
+##FORMAT=<ID=RDF,Number=1,Type=Integer,Description="Depth of reference-supporting bases on forward strand (reads1plus)">
+##FORMAT=<ID=RDR,Number=1,Type=Integer,Description="Depth of reference-supporting bases on reverse strand (reads1minus)">
+##FORMAT=<ID=ADF,Number=1,Type=Integer,Description="Depth of variant-supporting bases on forward strand (reads2plus)">
+##FORMAT=<ID=ADR,Number=1,Type=Integer,Description="Depth of variant-supporting bases on reverse strand (reads2minus)">
+##SnpEffVersion="3.6c (build 2014-05-20), by Pablo Cingolani"
+##SnpEffCmd="SnpEff  hg19 output/NA12843/NA12843.bam_VarScan.indels.vcf "
+##INFO=<ID=EFF,Number=.,Type=String,Description="Predicted effects for this variant.Format: 'Effect ( Effect_Impact | Functional_Class | Codon_Change | Amino_Acid_Change| Amino_Acid_length | Gene_Name | Transcript_BioType | Gene_Coding | Transcript_ID | Exon_Rank  | Genotype_Number [ | ERRORS | WARNINGS ] )' ">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NA12843
+chr1	47025839	.	GC	G	.	PASS	ADP=12;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||347|MKNK1|protein_coding|CODING|NM_198973.3|11|1),INTRON(MODIFIER||||424|MKNK1|protein_coding|CODING|NM_001135553.2|12|1),INTRON(MODIFIER||||465|MKNK1|protein_coding|CODING|NM_003684.5|13|1),INTRON(MODIFIER|||||MKNK1-AS1||NON_CODING|NR_038403.1|5|1),INTRON(MODIFIER|||||MKNK1||CODING|NR_024174.2|10|1),INTRON(MODIFIER|||||MKNK1||CODING|NR_024176.2|12|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:31:12:12:4:8:66.67%:6.7304E-4:30:33:4:0:5:3
+chr1	108160260	.	GA	G	.	PASS	ADP=31;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||287|VAV3|protein_coding|CODING|NM_001079874.1|3|1),INTRON(MODIFIER||||847|VAV3|protein_coding|CODING|NM_006113.4|20|1),SPLICE_SITE_REGION(LOW||||287|VAV3|protein_coding|CODING|NM_001079874.1|3|1),SPLICE_SITE_REGION(LOW||||847|VAV3|protein_coding|CODING|NM_006113.4|20|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:37:31:31:19:11:35.48%:1.594E-4:34:38:3:16:4:7
+chr2	209195491	.	G	GAGA	.	PASS	ADP=11;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||2098|PIKFYVE|protein_coding|CODING|NM_015040.3|23|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:32:11:11:3:8:72.73%:5.16E-4:32:23:0:3:1:7
+chr3	136618710	.	CT	C	.	PASS	ADP=49;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||377|NCK1|protein_coding|CODING|NM_006153.4|1|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:43:50:49:32:13:26%:4.4424E-5:40:35:13:19:4:9
+chr4	103731067	.	CAAAT	C	.	PASS	ADP=25;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_003340.6|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181886.3|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181887.2|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181888.3|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181889.2|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181890.2|2|1),INTRON(MODIFIER||||147|UBE2D3|protein_coding|CODING|NM_181891.2|2|1),INTRON(MODIFIER||||148|UBE2D3|protein_coding|CODING|NM_181892.3|1|1),INTRON(MODIFIER||||149|UBE2D3|protein_coding|CODING|NM_181893.2|1|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:121:26:25:2:24:92.31%:7.6222E-13:26:31:0:2:2:22
+chr6	91266349	.	T	TA	.	PASS	ADP=22;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||491|MAP3K7|protein_coding|CODING|NM_145333.2|5|1),INTRON(MODIFIER||||518|MAP3K7|protein_coding|CODING|NM_145332.2|5|1),INTRON(MODIFIER||||579|MAP3K7|protein_coding|CODING|NM_003188.3|5|1),INTRON(MODIFIER||||606|MAP3K7|protein_coding|CODING|NM_145331.2|5|1),SPLICE_SITE_REGION(LOW||||491|MAP3K7|protein_coding|CODING|NM_145333.2|5|1),SPLICE_SITE_REGION(LOW||||518|MAP3K7|protein_coding|CODING|NM_145332.2|5|1),SPLICE_SITE_REGION(LOW||||579|MAP3K7|protein_coding|CODING|NM_003188.3|5|1),SPLICE_SITE_REGION(LOW||||606|MAP3K7|protein_coding|CODING|NM_145331.2|5|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:35:22:22:12:10:45.45%:2.6061E-4:30:35:2:10:5:5
+chr11	65617113	.	AG	A	.	PASS	ADP=14;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||403|SNX32|protein_coding|CODING|NM_152760.2|2|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:64:14:14:1:13:92.86%:3.7391E-7:24:33:0:1:0:13
+chr12	26568456	.	TAAGAAAAGA	T	.	PASS	ADP=29;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||2701|ITPR2|protein_coding|CODING|NM_002223.2|50|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:38:29:29:18:11:37.93%:1.5195E-4:30:31:1:17:0:11
+chr12	26834804	.	T	TACTC	.	PASS	ADP=42;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||2701|ITPR2|protein_coding|CODING|NM_002223.2|13|1),SPLICE_SITE_DONOR(HIGH||||2701|ITPR2|protein_coding|CODING|NM_002223.2|13|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:51:42:42:27:15:35.71%:6.6622E-6:32:25:19:8:10:5
+chr12	26848663	.	A	AT	.	PASS	ADP=8;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||2701|ITPR2|protein_coding|CODING|NM_002223.2|9|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:41:8:8:0:8:100%:7.77E-5:0:32:0:0:2:6
+chr12	51203226	.	GT	G	.	PASS	ADP=34;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||271|ATF1|protein_coding|CODING|NM_005171.4|3|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:194:34:34:0:34:100%:3.5146E-20:0:37:0:0:28:6
+chr12	64858100	.	A	AT	.	PASS	ADP=30;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||729|TBK1|protein_coding|CODING|NM_013254.3|3|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:87:30:30:9:21:70%:1.7919E-9:32:32:8:1:21:0
+chr14	105238591	.	CCTGAG	C	.	PASS	ADP=14;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||480|AKT1|protein_coding|CODING|NM_001014431.1|12|1),INTRON(MODIFIER||||480|AKT1|protein_coding|CODING|NM_001014432.1|13|1),INTRON(MODIFIER||||480|AKT1|protein_coding|CODING|NM_005163.2|12|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:55:14:14:2:12:85.71%:2.9913E-6:28:20:2:0:11:1
+chr16	24192020	.	AAC	A	.	PASS	ADP=13;WT=0;HET=1;HOM=0;NC=0;EFF=INTRON(MODIFIER||||671|PRKCB|protein_coding|CODING|NM_212535.2|12|1),INTRON(MODIFIER||||673|PRKCB|protein_coding|CODING|NM_002738.6|12|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	0/1:36:13:13:4:9:69.23%:2.2883E-4:30:24:3:1:7:2
+chr17	35608781	.	CCT	C	.	PASS	ADP=15;WT=0;HET=0;HOM=1;NC=0;EFF=INTRON(MODIFIER||||2268|ACACA|protein_coding|CODING|NM_198838.1|15|1),INTRON(MODIFIER||||2288|ACACA|protein_coding|CODING|NM_198837.1|14|1),INTRON(MODIFIER||||2346|ACACA|protein_coding|CODING|NM_198836.1|16|1),INTRON(MODIFIER||||2346|ACACA|protein_coding|CODING|NM_198839.1|20|1),INTRON(MODIFIER||||2383|ACACA|protein_coding|CODING|NM_198834.1|16|1)	GT:GQ:SDP:DP:RD:AD:FREQ:PVAL:RBQ:ABQ:RDF:RDR:ADF:ADR	1/1:81:15:15:0:15:100%:6.4467E-9:0:24:0:0:14:1
