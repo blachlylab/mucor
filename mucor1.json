@@ -1,8 +1,0 @@
-{
-    "run_name": "mucor-output",
-    "gtf":      "~/data/ref/gencode19/gencode.v19.annotation.gtf",
-    "feature":  "gene_id",
-    "union":    false,
-    "filters":  ["MUTECT-KEEP", "VCF-PASS"],
-    "samples":  []
-}

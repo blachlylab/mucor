@@ -17,7 +17,6 @@
 
 import argparse
 import HTSeq
-import pdb # pdb.set_trace()
 import itertools
 import os
 from collections import defaultdict

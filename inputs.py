@@ -19,20 +19,24 @@
 from __future__ import print_function
 import HTSeq
 import sys
+import os
 from variant import Variant
-import pdb
+import numpy as np
+
+def throwWarning(message, help = False):
+    print("*** WARNING: " + message + " ***")
+    return
 
 class Parser(object):
     '''Object to cover all parsing functions'''
 
     def __init__(self):
             self.row = ''
+            self.source = ''
+            self.var = None
             self.fieldId = ''
             self.header = ''
-            self.fn = ''
-            self.eff = ''
-            self.fc = ''
-            self.source = ''
+            self.fn  = ''
 
             # Respective parse functions. 
             # Keys are identical to the allowed formats in mucor_config.py
@@ -46,104 +50,69 @@ class Parser(object):
                                         "VarScan":self.parse_VarScan,
                                         "HaplotypeCaller":self.parse_HapCaller,
                                         "FreeBayes":self.parse_FreeBayes,
-                                        "GenericGATK":self.parse_GenericGATK }
+                                        "GenericGATK":self.parse_GenericGATK,
+                                        "INFOCol":self.parse_INFO_Column }
 
-    def parse(self, source, row, fieldId, header, fn, effect, fc):
+    def parse(self, row, source):
         self.source = source
         self.row  = row
-        self.fieldId = fieldId
-        self.header = header
-        self.fn  = fn
-        self.eff  = effect
-        self.fc = fc
-        return self.supported_formats[self.source]()
+        chrom = row.chrom 
+        ref   = row.ref
+        alt   = "/".join(sorted(row.alt))
+        pos   = row.pos # already exists as GenomicPosition object
+        dp    = 0
+        frac  = 0.0
+        effect, fc = parse_EFC(row.info)
+        out = []
+        samples_dict = self.supported_formats[self.source](row.samples)
+        for sample, vals in samples_dict.items():
+            out.append(Variant(source='', sample=sample, pos=pos, ref=ref, alt=alt, frac=vals[1], dp=vals[0], eff=effect, fc=fc))
+        return out
 
-    def parse_MiSeq(self):
+    def parse_MiSeq(self,samples):
         ''' MiSeq vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            vf = None
+            dp = None 
+            if 'VF' in values.keys():
+                vf = float(values['VF'])
+            if 'DP' in values.keys():
+                dp = int(values['DP'])
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        fc    = self.fc
-        effect   = self.eff
-        for i in row[fieldId['INFO']].split(';'):
-            if i.startswith("DP="):
-                dp = i.split('=')[1]
+            if 'AD' in values.keys():
+                # prepare ref depth and alt depth in case VAF or DP was not defined 
+                rd = int(values['AD'].split(',')[0])
+                ad = int(values['AD'].split(',')[1])
+            if not vf and 'AD' in values.keys():
+                # try to calculate vaf from AD column
+                vf = float(ad)/float(ad + rd)
+            if not dp and 'AD' in values.keys():
+                # try to calculate dp from AD column
+                if vf:
+                    # if AD and VF are both defined, this will yield the same DP defined in the INFO column
+                    dp = round(ad/vf)
+                else:
+                    # the sum of ref and alt alleles may not equal total depth, if there are two mutations at the same location, or if a single base was mutated and not shown
+                    dp = rd + ad
+            out[sample] = (dp, vf) 
+        return out
 
-            # if the MiSeq software reported functional consequence and effect and the file is not snpEff anotated, the MiSeq annotations will be used instead
-            if i.startswith("FC=") and not fc:
-                for j in i.split('=')[1].split(','):
-                    if str(j.split('_')[0]) not in str(fc):
-                        fc += str(j.split('_')[0]) + ";"
-                    try:
-                        if str(j.split('_')[1]) not in str(effect):
-                            effect += str(j.split('_')[1]) + ";"
-                    except:
-                        pass
-            elif str(i) == "EXON":
-                fc += 'EXON'
-        if not fc:
-            fc = str("?")
-        if not effect:
-            effect = str("?")
-        k = 0
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "VF":
-                vf = float( row[fieldId[header[-1]]].split(':')[k] )
-            '''
-            #for when vf is not in the format column, but AD is
-            if str(i) == "AD" and not dp or not vf:
-                dp = 0
-                rd = int(row[fieldId[header[-1]]].split(':')[k].split(',')[0])
-                ad = int(row[fieldId[header[-1]]].split(':')[k].split(',')[1])
-                dp = int(rd) + int(ad)
-            '''
-            k += 1
-
-        position = int(row[fieldId['POS']])
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
-
-    def parse_IonTorrent(self):
+    def parse_IonTorrent(self, samples):
         ''' Ion Torrent vcf parser function. Input: InputParser object. Output: Variant object '''
-
-        row = self.row    
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        for i in row[fieldId['INFO']].split(';'):
-            if i.startswith("AO="):
-                tempval = i.split('=')[1]
-            if i.startswith("RO="):
-                ro = i.split('=')[1]
-            if i.startswith("DP="):
-                dp = i.split("=")[1]
-        if str(',') in str(tempval):
-            tempval2 = [int(numeric_string) for numeric_string in tempval.split(',')]
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None 
+            vf = None 
             try:
-                ao = sum(tempval2)
-            except:
-                abortWithMessage("AO should be an int, or a list of ints: AO = {0}/".format(tempval2))
-        else:
-            ao = tempval
-        vf = float(float(ao)/float(float(ro) + float(ao)))
-        position = int(row[fieldId['POS']])
-        for i in str(row[fieldId['ALT']]).split(','):
-            if len(str(row[fieldId['REF']])) > len(i):
-                # this is a deletion in Ion Torrent data
-                position = int(row[fieldId['POS']])
-                break
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
+                ao = sum( [int(x) for x in values['AO'].split(',')] )
+                ro = int(values['RO'])
+                dp = int(values['DP'])
+                vf = float(ao)/float(dp)
+            except KeyError:
+                pass
+            out[sample] = (dp, vf) 
+        return out
 
     def parse_MuTectOUT(self):
         ''' MuTect '.out' parser function. Input: InputParser object. Output: Variant object '''
@@ -155,45 +124,50 @@ class Parser(object):
         chrom = row[0]
         ref   = row[3]
         alt   = row[4]
-        effect = self.eff
-        fc = self.fc
+        effect = ""
+        fc = ""
         vf = float(row[fieldId['tumor_f']])
         dp = int(int(str(row[fieldId['t_ref_count']]).strip()) + int(str(row[fieldId['t_alt_count']]).strip()))
         position = int(row[fieldId['position']])
 
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+        var = Variant(source=os.path.basename(fn), sample='', pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
         
-    def parse_MuTectVCF(self):
+    def parse_MuTectVCF(self, samples):
         ''' MuTect vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None
+            vf = None 
+            # remove empty sample columns
+            if sample == "none" and values['DP'] == '0' and values['BQ'] == '.':
+                continue
+            try:
+                dp = values['DP']
+                vf = values['FA']
+            except KeyError:
+                pass
+            out[sample] = (dp, vf) 
+        return out
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        for i in self.header:
-            if str(i) not in ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'none']: # This line should detect if the sample id is in the line.
-                tmpsampID = i
-        for i in row[fieldId['FORMAT']].split(':'):
-            if i == "FA":
-                vf = float(row[fieldId[tmpsampID]].split(':')[j])
-            elif i == "DP":
-                dp = row[fieldId[tmpsampID]].split(':')[j]
-            j+=1
-        position = int(row[fieldId['POS']])
-
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
-
-    def parse_SomaticIndelDetector(self):
+    def parse_SomaticIndelDetector(self, samples):
+        ''' DEPRECIATED AND UNTESTED '''
         ''' GATK SomaticIndelDetector vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None
+            vf = None 
+            try:
+                dp = int(values['DP'])
+                ad = int(values['AD'].split(',')[1])
+                vf = float(ad)/float(dp)
+            except KeyError:
+                pass
+            out[sample] = (dp, vf) 
+        return out
 
+        '''
+        # pre-htseq vcf reder parse function
         row = self.row
         fieldId = self.fieldId
         header = self.header
@@ -219,166 +193,139 @@ class Parser(object):
         position = int(row[fieldId['POS']])
         var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
+        '''
 
-    def parse_SamTools(self):
+    def parse_SamTools(self, samples):
         ''' samtools vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None
+            vf = None 
+            if 'DP4' in values.keys():
+                dp4 = values['DP4'].split(',')
+                ro = int(dp4[0]) + int(dp4[1])
+                ao = int(dp4[2]) + int(dp4[3])
+                dp = ro + ao
+                vf = float(ao)/float(dp)
+            if not dp:
+                # if DP4 is not present, check for depth field
+                if 'DP' in values.keys():
+                    dp = int(values['DP'])
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        position = int(row[fieldId['POS']])
-        for i in row[fieldId['INFO']].split(';'):
-            if i.startswith("DP4="):
-                j = i.split('=')[1].split(',')
-                ro = int(int(j[0]) + int(j[1]))
-                ao = int(int(j[2]) + int(j[3]))
-                dp = int(int(ro) + int(ao))
-                vf = float( float(ao)/float(dp) )
-                var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-                return var
+            out[sample] = (dp, vf) 
+        return out
 
-    def parse_VarScan(self):
+    def parse_VarScan(self,samples):
         ''' varscan vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None
+            vf = None 
+            try:
+                dp = int(values['DP'])
+                vf = float(values['FREQ'].strip('%'))/100.0
+            except KeyError:
+                pass
+            out[sample] = (dp, vf) 
+        return out
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        position = int(row[fieldId['POS']])
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "DP":
-                dp = int(row[fieldId[header[-1]]].split(':')[j])
-            if str(i) == "FREQ":
-                vf = float(float(str(row[fieldId[header[-1]]].split(':')[j]).strip('%'))/float(100))
-            j += 1
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
-
-    def parse_HapCaller(self):
+    def parse_HapCaller(self, samples):
         ''' GATK haplotype caller vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            vf = None
+            dp = None 
+            try:
+                dp = int(values['DP'])
+                ad = str(values['AD'])
+                ref_count = int(ad.split(',')[0])
+                alt_count = int(ad.split(',')[1])
+                vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
+            except KeyError:
+                pass
+            except ZeroDivisionError:
+                if dp == 0 and alt_count == 0 and ref_count == 0:
+                    # This was called, but is not covered 
+                    vf = 0
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        position = int(row[fieldId['POS']])
-        '''
-        for i in row[fieldId['INFO']].split(';'):
-            if i.startswith("DP="):
-                dp = i.split('=')[1]
-            if i.startswith("AF="):
-                vf1 = float(i.split('=')[1])
-        '''
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "DP":
-                dp = int(row[fieldId[header[-1]]].split(':')[j])
-            if str(i) == "AD":
-                ad = str(row[fieldId[header[-1]]].split(':')[j])
-                if str(',') in ad:
-                    ref_count = int(ad.split(',')[0])
-                    alt_count = int(ad.split(',')[1])
-                    try:
-                        vf = float( float(alt_count)/(float(ref_count) + float(alt_count)) )
-                    except:
-                        vf=0.0
-                else:
-                    abortWithMessage("Sample {0} may not have Haplotype Caller mutations with no ALT or vf".format(header[-1]))
-            j += 1
-        try:
-            vf
-        except:
-            print(row, file=sys.stderr)
-            vf = 0.0
-        try:
-            dp
-        except:
-            print(row, file=sys.stderr)
-            dp = 0.0
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
+            out[sample] = (dp, vf)
+        return out
 
-    def parse_FreeBayes(self):
+    def parse_FreeBayes(self, samples):
         ''' freebayes vcf parser function. Input: InputParser object. Output: Variant object '''
+        out = {} # list of variant objects; 1 per sample
+        for sample, values in samples.items():
+            dp = None
+            vf = None
+            try:
+                dp = int(values['DP'])
+                ro = int(values['RO'])
+                ao = sum([int(x) for x in values['AO'].split(',')])
+                vf = float( float(ao)/float(ao + ro) )
+            except KeyError:
+                pass
+            out[sample] = (dp, vf) 
+        return out
 
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        position = int(row[fieldId['POS']])
-        if set(row[fieldId[header[-1]]].split(':')) == set(['.']):
-            # the sample data column is composed exclusively of period (missing data)
-            # skip this mutation in this sample
-            return False
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "DP":
-                dp = int(row[fieldId[header[-1]]].split(':')[j])
-            if str(i) == "RO":
-                ro = int( str(row[fieldId[header[-1]]].split(':')[j]) )
-            if str(i) == "AO":
-                ao = int(  sum([ int(x) for x in str(row[fieldId[header[-1]]].split(':')[j]).split(',')]) )
-            j += 1
-        vf = float( float(ao)/float(ao + ro) )
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
-
-    def parse_GenericGATK(self):
+    def parse_GenericGATK(self, samples):
         ''' 
         Generic GATK parser function. This was written for the Illumina BaseSpace BWA Enrichment Workflow vcf files, but may apply to more filetypes
         Input: InputParser object. Output: Variant object 
         '''
-        row = self.row
-        fieldId = self.fieldId
-        header = self.header
-        fn = self.fn 
-        chrom = row[0]
-        ref   = row[3]
-        alt   = row[4]
-        effect = self.eff
-        fc = self.fc
-        j = 0
-        position = int(row[fieldId['POS']])
-        for i in row[fieldId['FORMAT']].split(':'):
-            if str(i) == "AD":
-                ro = int(row[fieldId[header[-1]]].split(':')[j].split(',')[0]) 
-                #ao = int(row[fieldId[header[-1]]].split(':')[j].split(',')[-1]) # fails when the mutation has two alternate alleles in the same VCF line
-                ao = sum([int(x) for x in row[fieldId[header[-1]]].split(':')[j].split(',')[1:]])
-                dp = ro + ao
+        out = {}
+        for sample, values in samples.items():
+            dp = None
+            vf = None
+            if 'DP' in values.keys():
+                #DP is defined 
+                dp = values['DP']
+            if 'VF' in values.keys():
+                #VF is defined
+                vf = values['VF']
+            if not dp or not vf:
                 try:
-                    vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
-                except:
-                    print("\nwarning: no vaf?\n" + str(row) + "\n")
-                    vf=0
-                break
-            j += 1
+                    # try to determine depth and VAF from 'AD' field, if present
+                    ro = int(values['AD'].split(',')[0])
+                    ao = sum([int(x) for x in values['AD'].split(',')[1:]])
+                    if not dp and (ro or ao): # is is possible that ro and ao are both 0, leading to division error when calculating vf
+                        dp = ro + ao
+                        vf = float(float(ao)/float(dp)) # one VF for all possible alternate alleles. Nothing unusual, unless the mutation has multiple alt alleles in 1 vcf line
+                except KeyError:
+                    if not dp:
+                        # there may not have been a mutant here, or it was unable to be identified.
+                        #    printing this error can result in overwhelming amounts of warnings
+                        pass
+                        #throwWarning("Could not determine depth for {0} using GenericGATK parser".format(sample))
+                    if not vf:
+                        # there may not have been a mutant here, or it was unable to be identified.
+                        #    printing this error can result in overwhelming amounts of warnings
+                        pass
+                        #throwWarning("Could not determine variant allele frequency for {0} using GenericGATK parser".format(sample))
+                    pass
+            out[sample] = (dp, vf) 
+        return out
 
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
-        return var
+    def parse_INFO_Column(self, samples):
+        '''
+        Generic VCF parser which extracts allele frequency and depth from the INFO field, rather than the SAMPLE field associated with a specific sample. May be useful for cases in which aggregate VAF and DP are more interesting than per-sample metrics, or when aggregate values are available and per-sample values are not.
+        Input: 
+        '''
+        out = {}
+        info = self.row.info
+        for sample, values in samples.items():
+            dp = None 
+            vf = None 
+            for key in ['VAF', 'VF', 'AF']: # expandable to accomadate other abbreviations  
+                if key in info:
+                    vf = np.sum(info[key])  # sum allele frequencies in the event that the position is multi-allelic
+            for key in ['DP', 'ADP']:              # expandable to accomadate other abbreviations 
+                if key in info:
+                    dp = info[key]
+            out[sample] = (dp, vf)
+        return out
 
     def parse_MAF(self):
+        ''' DEPRECIATED AND UNTESTED'''
         ''' maf filetype parser function. Input: InputParser object. Output: Variant object '''
 
         row = self.row
@@ -397,5 +344,43 @@ class Parser(object):
             ref = ""
         if alt == "-":
             alt = ""   
-        var = Variant(source=fn.split('/')[-1], pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
+        var = Variant(source=os.path.basename(fn), pos=HTSeq.GenomicPosition(chrom, int(position)), ref=ref, alt=alt, frac=vf, dp=dp, eff=effect.strip(';'), fc=fc.strip(';'))
         return var
+
+def castList(list_or_string):
+    '''
+    Input: a string or a list 
+    Output: list 
+    '''
+    if isinstance(list_or_string, list):
+        return list_or_string
+    else:
+        return [list_or_string]
+
+def parse_EFC(INFO):
+    # attempt to extract 'effect' and 'functional consequence' from the VCF line
+    effect = "" # e.g. E123K
+    fc = ""     # e.g. SYNONYMOUS_CODING
+    # check for snpeff annotation first
+    if 'EFF' in INFO:
+        castList(INFO['EFF'])
+        fc = ";".join([x for x in set([ x.split('(')[0] for x in castList(INFO['EFF']) ])])
+        effect = ";".join([x for x in set([ x.split('|')[3] for x in castList(INFO['EFF']) if x.split('|')[3] ])])
+    # check for newer type of snpeff notation
+    elif 'ANN' in INFO:
+        castList(INFO['ANN'])
+        fc = ";".join([x for x in set([ x.split('|')[1] for x in castList(INFO['ANN']) ])])
+        effect = ";".join([x for x in set([ x.split('|')[9] for x in castList(INFO['ANN']) ])])
+    # if the MiSeq software reported functional consequence and effect and the file is not snpEff anotated, the MiSeq annotations will be used instead
+    elif 'FC' in INFO:
+        fc  = ";".join([x for x in set( [y.split('_')[0] for y in castList(INFO['FC'])] )])
+        try:
+            effect = ";".join([x for x in set( [y.split('_')[1] for y in castList(INFO['FC'])] )])
+        except IndexError:
+            # this mutation has no consequence
+            # i.e. Silent, Noncoding, etc. 
+            pass
+        if 'EXON' in INFO:
+            fc += ";EXON"
+
+    return effect, fc

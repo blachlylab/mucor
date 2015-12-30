@@ -23,6 +23,7 @@ from __future__ import print_function
 
 # python standard modules
 import os
+import re
 import sys
 reload(sys)  
 sys.setdefaultencoding('utf8')
@@ -33,7 +34,6 @@ import itertools
 from collections import defaultdict
 import gzip
 import cPickle as pickle
-from pdb import set_trace as stop 
 import json
 
 # nonstandard modules
@@ -47,6 +47,7 @@ import pysam
 
 # mucor modules
 from config import Config
+from mucor_config import parseAndValidateRegions 
 
 def abortWithMessage(message):
     print("*** FATAL ERROR: " + message + " ***")
@@ -64,7 +65,8 @@ def parseJSON(json_config):
     config = Config()
     try:
         JD = json.load(open(json_config,'r'))
-    except:
+    except ValueError as json_error:
+        throwWarning(json_error.message)
         abortWithMessage("Could not load the given JSON config file. See the example config for proper formatting.")
 
     # write dictionary values into a more human-friendly config class
@@ -81,55 +83,23 @@ def parseJSON(json_config):
     config.samples = []
     config.bams = {}
     for i in JD['samples']:
-        try:
-            if len(i['bam']) >= 1:
-                for bam in i['bam']:
-                    config.inputFiles.append(bam['path'])
-                    config.samples.append(i['id'])
-                    try:
-                        config.bams[i['id']].append(bam['path'])
-                    except:
-                        config.bams[i['id']] = []
-                        config.bams[i['id']].append(bam['path'])
-        except:
-            throwWarning("Sample {0} has no BAM file!".format(i))
+        # make a list of bam file paths defined by the JSON config
+        #   i.e. extract the path of every file, if the file type is bam
+        bams = [x['path'] for x in i['files'] if x['type'] == "bam"]
+        if len(bams) >= 1:
+            for bam in bams:
+                config.inputFiles.append(bam)
+                config.samples.append(i['id'])
+                try:
+                    config.bams[i['id']].append(bam)
+                except KeyError:
+                    config.bams[i['id']] = []
+                    config.bams[i['id']].append(bam)
+        else:
+            throwWarning("Sample {0} has no BAM file!".format(i['id']))
+    if not config.bams:
+        abortWithMessage("No bam files defined!")
     return config 
-
-def parseAndValidateRegions(regions, json_config):
-    print("== Parsing and Validating Regions ==")
-    regions_list = []
-    if regions: # user has defined regions to focus on
-        for i in str(regions).split(','):
-            print("\t{0}".format(i))
-            if str(i.split('.')[-1]).lower() == "bed":
-                # this is a bed file of regions
-                # it will be parsed in the main python script
-                if os.path.isfile(str(i)):
-                    regions_list.append(os.path.expanduser(str(i)))
-                else:
-                    abortWithMessage("BED file {0} cannot be found".format(str(i)))
-            elif str(str(i).split(':')[0]).startswith('chr') and str(str(i).split(':')[0]) != "chr":
-                # this looks like a 'chromosome:start-stop' formatted region
-                try:                                    # does the input region have valid start and ends?
-                    int(str(str(i).split(':')[1])[0])
-                    int(str(str(i).split(':')[1])[1])
-                    regions_list.append(i)
-                except ValueError:                      # start and/or end are invalid
-                    abortWithMessage("Region {0} is not valid. Follow standard convention, Ex: chr1:100-300".format(str(i)))
-                except IndexError:                      # only chromosome was defined. this is permitted (whole chromosome region)
-                    regions_list.append(i)
-            else:
-                abortWithMessage("Region {0} is not a bed file or valid region.".format(i))
-        json_config.regions = regions_list
-    elif not regions and json_config.regions: 
-        # user declared no regions when running depth gauge, but there are usable regions in the json
-        for i in json_config.regions:
-            print("\t{0}".format(i))
-        return json_config
-    else:
-        # there are no regions to interrogate with depth gauge
-        abortWithMessage("Regions not set")
-    return json_config
 
 def parseRegionBed(regionfile, regionDictIn):
     ''' 
@@ -168,17 +138,18 @@ def GaugeDepth(config) :
     for item in config.regions:
         if str(str(item).split('.')[-1]).lower() == 'bed':      # this item is a bed file
             regionDict = parseRegionBed(item, regionDict)
-        elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
-            reg_chr = str(item.split(':')[0])
-            try:
-                reg_str = str(str(item.split(':')[1]).split('-')[0])
-                reg_end = str(str(item.split(':')[1]).split('-')[1])
+        else:                                                   # this was defined as a string
+            reg_chr = item[0]
+            reg_str = item[1]
+            reg_end  = item[2]
+            if reg_str >= 0 and reg_end > reg_str:
                 name = str(reg_chr) + ":" + str(reg_str) + "-" + str(reg_end)
-            except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
-                reg_str = 1
-                reg_end = 1E9
+            elif reg_str >= 0 and reg_str == reg_end:
+                name = str(reg_chr) + ":" + str(reg_str)
+            elif not reg_str and not reg_end:
                 name = str(reg_chr)
             regionDict[reg_chr].add((reg_str, reg_end, name))
+
     if not regionDict:
         abortWithMessage("Regions not set!")
 
@@ -193,16 +164,24 @@ def GaugeDepth(config) :
             except ValueError:
                 throwWarning("Cannot open file {0}".format(fn))
                 continue
+            contig_length_dict = dict(zip(samfile.references, samfile.lengths)) # save contig lengths for later
             for contig, ROI in regionDict.items():
                 for window in ROI:
+                    bed_name = window[2]
+                    # make window 0-based
                     try:
-                        bed_name = window[2]
-                    except:
-                        stop()
-                    # make window 0
-                    window = [int(window[0]) - 1, int(window[1])]
-                    
-                    
+                        window = [int(window[0]) - 1, int(window[1])]
+                    except TypeError: 
+                        # start and/or stop were not defined - pull them from contig dictionary
+                        if not window[0]:
+                            start = 0
+                        else:
+                            start = int(window[0] - 1)
+                        if not window[1]:
+                            end = contig_length_dict[contig]
+                        else:
+                            end = int(window[1])
+                        window = [start, end]
                     # loop over all ROIs, checking this bam 
                     if config.p:
                         #point method 
@@ -230,7 +209,7 @@ def GaugeDepth(config) :
                             try:
                                 tmp_dict[pileupcolumn.pos]
                                 tmp_dict[pileupcolumn.pos] = pileupcolumn.n       
-                            except:
+                            except KeyError:
                                 #skip this position if it's not in the region dict
                                 continue
                         avg_covg = np.mean(tmp_dict.values())
@@ -282,12 +261,13 @@ def printOutput(config, covDF):
     startTime = time.clock()
     print("\n=== Writing output files to {0}/ ===".format(config.outputDir))
     outDF = covDF.groupby(['chr','start','stop','name']).apply(SamplesToColumns).reset_index(drop=True)
-    try:
-        outXLSX = pd.ExcelWriter(str(config.outputDir) + "/" + config.outfile, engine='xlsxwriter')
-    except:
-        abortWithMessage("Error opening output files in {0}/".format(config.outputDir))
+    # pandas can actually start up an excel writer object using a non-existant or unwritable file path. The error will come when saving to such a path. tested in pandas version 0.16.2
+    outXLSX = pd.ExcelWriter(str(config.outputDir) + "/" + config.outfile, engine='xlsxwriter')
     outDF.to_excel(outXLSX, 'Depth Gauge', index=False)
-    outXLSX.save()
+    try:
+        outXLSX.save()
+    except IOError:
+        abortWithMessage("Output directory is not writable or doesn't exist: {0}".format(config.outputDir))
     totalTime = time.clock() - startTime
     print("\t{0}: {1} rows".format(str(config.outputDir) + "/" + config.outfile , len(outDF)))     
     return True
@@ -304,7 +284,6 @@ def main():
     parser.add_argument("-r", "--regions", default="", help="Comma separated list of bed regions and/or bed files by which to limit output. Ex: chr1:10230-10240,chr2,my_regions.bed")
     args = parser.parse_args()
     config = parseJSON(args.json)
-    config = parseAndValidateRegions(args.regions, config)
     config.p = bool(args.p)
     config.c = bool(args.c)
     if config.p and config.c:
@@ -320,14 +299,14 @@ def main():
     elif not os.path.exists(config.outputDir):
         try:
             os.makedirs(config.outputDir)
-        except:
+        except OSError:
             abortWithMessage("Error when creating output directory {0}".format(config.outputDir))
 
     # check that all specified variant files exist
     for fn in config.inputFiles:
         if not os.path.exists(fn):
             abortWithMessage("Could not find variant file: {0}".format(fn))
-
+    config.regions = parseAndValidateRegions(args.regions, config) 
     covDF = GaugeDepth(config)
     printOutput(config, covDF)
     # pretty print newline before exit

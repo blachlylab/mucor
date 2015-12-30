@@ -17,10 +17,13 @@
 
 # variant.py
 
+from __future__ import print_function
+
 class Variant:
 	'''Data about SNV and Indels'''
-	def __init__(self,source,pos,ref,alt,frac,dp, eff,fc):
+	def __init__(self,source,sample,pos,ref,alt,frac,dp, eff,fc):
 		self.source = source	# source of variant - typically a filename
+		self.sample = sample	# sample ID, as defined in the VCF 
 		self.pos = pos			# HTSeq.GenomicPosition
 		self.ref = ref
 		self.alt = alt
@@ -28,4 +31,8 @@ class Variant:
 		self.dp = dp            
 		self.eff = eff          
 		self.fc = fc
-
+	def __str__(self):
+		out = ""
+		for k,v in {'source':self.source, 'sample':self.sample, 'pos':self.pos, 'ref':self.ref, 'alt':self.alt, 'frac':self.frac, 'dp':self.dp, 'eff':self.eff, 'fc':self.fc}.items():
+			out += k + ":\t" + str(v) + "\n"
+		return out.strip()
