@@ -1,0 +1,170 @@
+{
+    "databases": {
+        "dbsnp": "00-common_all.vcf.gz"
+    }, 
+    "fast": "", 
+    "feature": "gene_id", 
+    "filters": [
+        ".", 
+        "PASS"
+    ], 
+    "gff": "./gencode.v19.annotation.gtf", 
+    "outputDir": "./example5", 
+    "outputFormats": [
+        "all"
+    ], 
+    "regions": ["hotspots.bed"], 
+    "samples": [
+        {
+            "files": [
+                {
+                    "path": "./NA12829/NA12829.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12829/NA12829.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12829"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12830/NA12830.bam", 
+                    "type": "bam"
+                }, 
+                {
+                    "path": "./NA12830/NA12830.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12830"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12842/NA12842.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12842/NA12842.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12842"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12843/NA12843.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12843/NA12843.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12843"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12872/NA12872.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12872/NA12872.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12872"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12873/NA12873.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12873/NA12873.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12873"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12874/NA12874.bam", 
+                    "type": "bam"
+                }, 
+                {
+                    "path": "./NA12874/NA12874.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12874"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12878/NA12878.bam", 
+                    "type": "bam"
+                }, 
+                {
+                    "path": "./NA12878/NA12878.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12878"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12889/NA12889.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12889/NA12889.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12889"
+        }, 
+        {
+            "files": [
+                {
+                    "path": "./NA12890/NA12890.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }, 
+                {
+                    "path": "./NA12890/NA12890.bam", 
+                    "type": "bam"
+                }
+            ], 
+            "id": "NA12890"
+        }
+    ], 
+    "union": false
+}
