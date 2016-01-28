@@ -27,6 +27,7 @@ import numpy as np
 import time
 from info import Info
 
+import eucDist_output
 from mucor import abortWithMessage
 from mucor import throwWarning
 
@@ -63,7 +64,11 @@ class Writer(object):
                                     "mutXsampVAF": "feature_and_mutation_by_sample_vaf.xlsx",
                                     "vcf": "variant_locations.vcf",
                                     "runinfo": "run_info.txt" }
-        
+
+        self.EucDist = eucDist_output.VAFEuclideanDistance.__get__(self,Writer)
+        self.supported_formats["eucdist"] = self.EucDist
+        self.file_names["eucdist"] = "vaf_euclidean_distance.xlsx"
+
     def write(self, data, format, outputDirName, config):
         '''
         Write data in format to outputDirName
@@ -228,6 +233,24 @@ class Writer(object):
         
         outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
         outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
+        # begin mod
+        import pdb
+        
+        outDF.fillna(0,inplace=True)
+        samps = set(outDF.columns)
+        eucDF = pd.DataFrame(columns=samps, index=samps)
+        while samps:
+            sample = samps.pop()
+            for other in samps:
+                eucDist = np.sqrt((outDF[sample].subtract(outDF[other])**2).sum())
+                '''
+                if eucDist == 0:
+                    pdb.set_trace()
+                '''
+                eucDF.loc[sample, other] = eucDist
+                # copy this line, inverting indeces, to make it symetric
+        pdb.set_trace()
+        # end mod
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
         try:
             ofFeature_and_MutationXSample.save()

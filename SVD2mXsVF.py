@@ -41,10 +41,10 @@ def main(fn):
     fixed.reset_index(drop=True,inplace=True)
     fixed.vf = fixed.vf.astype(float)
     ow = Writer()
-    ow.write(fixed,'mutXsampVAF',config.outputDirName,config)
+    ow.write(fixed,'eucdist',config.outputDirName,config)
 
 if __name__ == "__main__":
-    if os.path.exists('feature_and_mutation_by_sample_vaf.xlsx'):
+    if os.path.exists('vaf_euclidean_distance.xlsx'):
         print("will not overwrite ./feature_and_mutation_by_sample_vaf.xlsx\nmove it or rename it.")
         exit()
 
