@@ -52,6 +52,12 @@ try:
     import HTSeq
 except ImportError as err:
     print(str(err) + ". This module is required.")
+    print("* NOTE! If you installed with pip install mucor,")
+    print("* the numpy and pandas dependencies were automatically")
+    print("* installed. However, due to a bug in the HTSeq")
+    print("* installation, it cannot be automatically installed")
+    print("* at the same time as numpy.")
+    print("* SOLUTION: pip install HTSeq")
     sys.exit()
 
 # optional modules
