@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name="mucor",
-    version="1.5",
+    version="1.51",
     description="Genomic Variant Aggregation and Mutation Correlation",
     author="James Blachly",
     author_email="james blachly at gmail com",
@@ -10,6 +10,7 @@ setup(name="mucor",
     packages=find_packages(),
     include_package_data=True,
     install_requires=["pandas", "numpy", "pytabix", "xlsxwriter"],
+    scripts=['mucor.py', 'mucor_config.py', 'depth_gauge.py'],
     keywords = "sequencing, VCF, mutation, variant",
     classifiers = [ "Development Status :: 5 - Production/Stable",
                     "Environment :: Console",

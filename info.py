@@ -27,7 +27,7 @@ class Info:
                                                          
 
 """
-    version = "1.5"
+    version = "1.51"
     versionInfo = "mucor version {0}\nJames S Blachly, MD\nKarl W Kroll, BS".format(version)
     # usage needs to be updated, or eliminated if argparse can replace this function. 
     usage = """
