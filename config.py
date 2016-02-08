@@ -32,6 +32,7 @@ class Config(object):
             self.regions = []
             self.filename2samples = {}
             self.source = {}
+            self.format = {}
 
     def __str__(self):
         string_rep =    "No. samples: {0}\n\n" + \

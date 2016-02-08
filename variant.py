@@ -21,8 +21,9 @@ from __future__ import print_function
 
 class Variant:
 	'''Data about SNV and Indels'''
-	def __init__(self,source,sample,pos,ref,alt,frac,dp, eff,fc):
-		self.source = source	# source of variant - typically a filename
+	def __init__(self,fn, source,sample,pos,ref,alt,frac,dp, eff,fc):
+		self.fn = fn	# source of variant - typically a filename
+		self.source = source
 		self.sample = sample	# sample ID, as defined in the VCF 
 		self.pos = pos			# HTSeq.GenomicPosition
 		self.ref = ref

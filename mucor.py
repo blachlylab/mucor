@@ -200,6 +200,7 @@ def parseJSON(json_config):
             filename = os.path.basename(j['path'])
             config.filename2samples[filename] = i['id']
             config.source[filename] = j['source']
+            config.format[filename] = j['format']
             config.inputFiles.append(j['path'])
 
     return config 
@@ -389,7 +390,7 @@ def annotateDF(grp, databases):
     pos = grp['pos'].unique()[0]
     ref = grp['ref'].unique()[0]
     alt = grp['alt'].unique()[0]
-    var = Variant(source=None, sample=None, pos=HTSeq.GenomicPosition(chrom, pos), ref=ref, alt=alt, frac=None, dp=None, eff=None, fc=None)
+    var = Variant(fn=None, source=None, sample=None, pos=HTSeq.GenomicPosition(chrom, pos), ref=ref, alt=alt, frac=None, dp=None, eff=None, fc=None)
     dbEntries = dbLookup(var, databases)
     return pd.Series(dbEntries)
 
@@ -429,6 +430,7 @@ def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unr
     fc = var.fc
     sample = var.sample
     source = var.source
+    fn = var.fn 
     count = 0 # initialize this database column now to save for later
     freq = 0.0 # initialize this database column now to save for later
     
@@ -439,8 +441,8 @@ def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unr
 
     for feature in features.split(', '):
         # Removing columns from the following 'columns' list will mask them from output
-        columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
-        values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample, source  ]
+        columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source','fn' ]
+        values  = [ chr,  pos,  ref,  alt,  vf,  dp,  feature,  effect,  fc , count,  freq,  sample , source , fn  ]
 
         vardata = dict(zip( columns, values ))
         for key in vardata.keys():
@@ -505,9 +507,11 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                 if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
                     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
                 source = config.source[ os.path.basename(fn) ]
+                format = config.format[ os.path.basename(fn) ]
                 parser = inputs.Parser()
                 parser.row = row
                 parser.source = source
+                parser.format = format
                 parser.fieldId = fieldId
                 parser.header = header
                 parser.fn = fn 
@@ -525,18 +529,21 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
             varReader = HTSeq.VCF_Reader(str(fn))
             varReader.parse_meta()
             varReader.make_info_dict()
+            parser = inputs.Parser()
+            format = config.format[ os.path.basename(fn) ]
+            parser.source = config.source[ os.path.basename(fn) ]
+            parser.fn = os.path.basename(fn)
+            parser.format = format
             for row in varReader:
                 if row.filter not in filters:
                     continue
                 if regions and not inRegionDict(row.pos.chrom, int(row.pos.pos), int(row.pos.pos), regionDict ):
                     continue
                 row.unpack_info(varReader.infodict)
-                parser = inputs.Parser()
-                source = config.source[ os.path.basename(fn) ]
                 try:
-                    samps = parser.parse(row, source)
+                    samps = parser.parse(row)
                 except KeyError:
-                    throwWarning("parsing " + fn + " as '" + source + "'")
+                    throwWarning("parsing " + fn + " as '" + format + "'")
                     print("Cannot parse file from an unsupported or unknown variant caller. \nPlease use supported variant software, or compose an input module compatible with inputs.py")
                     print("Options include: " + str(parser.supported_formats.keys()).replace("'",""))
                     break
@@ -549,9 +556,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
                         pass
                     if not var or var.sample not in config.samples:
                         # this sample has no mutation data at the given location, or this sample was not specified as a sample of interest in the JSON config 
-                        continue
-                    var.source = os.path.basename(fn)
-                    
+                        continue                    
                     varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
         else:
             throwWarning("Unable to parse file with extension '{0}': {1}".format(kind, fn))
@@ -561,7 +566,7 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
         totalTime = time.clock() - startTime
         print("{0:02d}:{1:02d}\t{2}".format(int(totalTime/60), int(totalTime % 60), fn))
     
-    columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source']
+    columns = ['chr','pos','ref','alt','vf','dp','feature','effect','fc','count','freq','sample','source','fn']
     # Transform data frame dictionary into pandas DF. Major speed increase compared to appending variants to the DF while reading the input files. 
     try:
         varDF = pd.DataFrame(varD, columns=columns)
@@ -623,7 +628,8 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
 
     #stop() # this command throws a warning
     varDF.replace('', '?', inplace=True)
-
+    from pdb import set_trace as stop
+    stop()
     return varDF, knownFeatures, gas 
 
 def printOutput(config, outputDirName, varDF):

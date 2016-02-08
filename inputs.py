@@ -33,6 +33,7 @@ class Parser(object):
     def __init__(self):
             self.row = ''
             self.source = ''
+            self.format = ''
             self.var = None
             self.fieldId = ''
             self.header = ''
@@ -53,8 +54,7 @@ class Parser(object):
                                         "GenericGATK":self.parse_GenericGATK,
                                         "INFOCol":self.parse_INFO_Column }
 
-    def parse(self, row, source):
-        self.source = source
+    def parse(self, row):
         self.row  = row
         chrom = row.chrom 
         ref   = row.ref
@@ -64,9 +64,9 @@ class Parser(object):
         frac  = 0.0
         effect, fc = parse_EFC(row.info)
         out = []
-        samples_dict = self.supported_formats[self.source](row.samples)
+        samples_dict = self.supported_formats[self.format](row.samples)
         for sample, vals in samples_dict.items():
-            out.append(Variant(source='', sample=sample, pos=pos, ref=ref, alt=alt, frac=vals[1], dp=vals[0], eff=effect, fc=fc))
+            out.append(Variant(fn=self.fn, source=self.source, sample=sample, pos=pos, ref=ref, alt=alt, frac=vals[1], dp=vals[0], eff=effect, fc=fc))
         return out
 
     def parse_MiSeq(self,samples):

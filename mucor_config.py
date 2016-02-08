@@ -169,9 +169,9 @@ def blankJSONDict():
                 full_path = os.path.join(root, dirs, files)
                 source = "VarScan"
                 if os.path.splitext(files)[1] == str(".vcf") or files.endswith(".vcf.gz"):
-                    tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':False, 'source':source} )
+                    tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':False, 'format':source, 'source':source} )
                 elif os.path.splitext(files)[1] == str(".out"):
-                    tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+                    tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'format':source, 'source':source} )
                 elif os.path.splitext(files)[1] == str(".bam"):
                     try:
                         tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)} )
@@ -180,9 +180,9 @@ def blankJSONDict():
                         tmpSampleDict['files'].append({'type':'bam', 'path':str(full_path)})
             # Not sure if these still work 
                 elif os.path.splitext(files)[1].lower() == str(".maf"):
-                    tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
+                    tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'format':source, 'source':source} )
                 elif os.path.splitext(files)[1].lower() == str(".gvf"):
-                    tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
+                    tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'format':source, 'source':source} )
                 else:
                     # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
                     # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
@@ -204,9 +204,9 @@ def processFile(full_path, tmpSampleDict):
             throwWarning(full_path)
             print("Malformed or empty VCF file: {0}".format(full_path))
         '''
-        tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'source':source} )
+        tmpSampleDict['files'].append({'type':'vcf', 'path':str(full_path), 'snpeff':DetectSnpEffStatus(full_path), 'format':source, 'source':source} )
     elif os.path.splitext(full_path)[1] == str(".out"):
-        tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'source':source} )
+        tmpSampleDict['files'].append({'type':'mutect', 'path':str(full_path), 'format':source, 'source':source} )
     elif os.path.splitext(full_path)[1] == str(".bam"):
         try:
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
@@ -216,9 +216,9 @@ def processFile(full_path, tmpSampleDict):
             tmpSampleDict['files'].append({'type':'bam','path':str(full_path)} )
 # Not sure if these still work 
     elif os.path.splitext(full_path)[1].lower() == str(".maf"):
-        tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'source':source} )
+        tmpSampleDict['files'].append({'type':'maf', 'path':str(full_path), 'format':source, 'source':source} )
     elif os.path.splitext(full_path)[1].lower() == str(".gvf"):
-        tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'source':source} )
+        tmpSampleDict['files'].append({'type':'gvf', 'path':str(full_path), 'format':source, 'source':source} )
     else:
         # If not a VCF, MAF, GVF, or Mutect .out type, ignore it. Uncomment the following line to see the names of files that are being ignored
         # print("Found an unsupported file type " + str(full_path) + " for sample " + str(sid))
@@ -335,6 +335,8 @@ def getJSONDict(args):
         # directory crawl searching for sample name in the file name/path
         if args['project_directory']:
             for root, dirs, files in os.walk(args['project_directory']):
+                #from pdb import set_trace as stop
+                #stop()
                 for i in files:
                     if re.search(r"\b" + re.escape(sid) + r"\b", i): 
                     # be careful with sample names here. "U-23" will catch "U-238" etc. Occasional cases can be resolved by manually editing the JSON config file
@@ -353,8 +355,22 @@ def getJSONDict(args):
                 if sid in set(varReader.sampleids): 
                     tmpSampleDict = processFile(full_path, tmpSampleDict)
         # uniquify the list of files associated with the sample, in case they were supplied directly via (-i) and found while directory crawling (-d)
-        tmpSampleDict['files'] =  { v['path']:v for v in tmpSampleDict['files']}.values()
+        #     Note that these must be sorted if a sample will have more than 1 file associated with any "source"
+        tmpSampleDict['files'] =  sorted({ v['path']:v for v in tmpSampleDict['files']}.values())
         json_dict['samples'].append(tmpSampleDict)
+    
+    # uniquify the sources 
+    # if the "source" field is to be used to name output columns, they must be unique
+    #     this code will add integer counts to the ends of repeated sources, e.g. VarScan.1, VarScan.2
+    for sample in range(len(json_dict['samples'])):
+        countDict = defaultdict(int)
+        incDict   = {x['format']:1 for x in json_dict['samples'][sample]['files']}
+        for x in range(len(json_dict['samples'][sample]['files'])):
+            countDict[json_dict['samples'][sample]['files'][x]['format']] += 1
+        for x in range(len(json_dict['samples'][sample]['files'])):
+            if countDict[json_dict['samples'][sample]['files'][x]['format']] > 1:
+                json_dict['samples'][sample]['files'][x]['source'] += str("." + str(incDict[json_dict['samples'][sample]['files'][x]['format']]))
+                incDict[json_dict['samples'][sample]['files'][x]['format']] += 1
     return json_dict
 
 def inconsistentFilesPerSample(json_dict):
