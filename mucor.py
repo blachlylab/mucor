@@ -628,8 +628,6 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
 
     #stop() # this command throws a warning
     varDF.replace('', '?', inplace=True)
-    from pdb import set_trace as stop
-    stop()
     return varDF, knownFeatures, gas 
 
 def printOutput(config, outputDirName, varDF):

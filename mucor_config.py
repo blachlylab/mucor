@@ -316,7 +316,7 @@ def getJSONDict(args):
     # Output formats
     json_dict['outputFormats'] = []
     for i in str(args['output_type']).split(','):
-        json_dict['outputFormats'].append(str(i)) #.lower() was here for some reason
+        json_dict['outputFormats'].append(str(i)) #.lower() can be used here to make format identifiers insensitive to capitalization
 
     # Samples and associated variant files
     samples = [] 
@@ -470,6 +470,22 @@ def main():
     # Will this output overwrite an existing JSON config file?
     if os.path.exists(args['json_config_output']):
         abortWithMessage("JSON config file {0} already exists.".format(args['json_config_output']))
+
+    # Are the specified output formats known?
+    knownTypes = sorted(output.Writer().file_names.keys())
+    anyWrong = 0
+    for inputType in str(args['output_type']).split(','):
+        if inputType not in knownTypes:
+            throwWarning("{0} is not known!".format(inputType))
+            anyWrong += 1
+    if len(str(args['output_type']).split(',')) == anyWrong:
+        # quit if none of the input types were known
+        abortWithMessage("No known output file types selected!")
+    elif anyWrong:
+        # if 1 or more of the input types were known, write config file w/ user-defined parameters
+        #    prompting them to fix the config. Mucor will crash at output if it is run with improperly defined output types
+        print("Please correct your JSON config, selecting from the following output types:")
+        print(knownTypes)        
 
     # Does the given output directory exist and contain output already?
     if os.path.exists(args['output_directory']) and [x for x in os.listdir(args['output_directory']) if x in output.Writer().file_names.values() ]:

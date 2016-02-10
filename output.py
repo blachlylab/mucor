@@ -41,9 +41,11 @@ class Writer(object):
         self.supported_formats = {  "default": self.Default,
                                     "counts": self.Counts,
                                     "txt": self.VariantDetails,
-                                    "longtxt": self.LongVariantDetails,
                                     "xls": self.VariantDetails,
+                                    "longtxt": self.LongVariantDetails,
                                     "longxls": self.LongVariantDetails,
+                                    "svdtxt": self.SampleVariantDetails,
+                                    "svdxls": self.SampleVariantDetails,
                                     "bed":self.VariantBed,
                                     "featXsamp": self.FeatureXSample,
                                     "mutXsamp": self.Feature_and_MutationXSample,
@@ -54,9 +56,11 @@ class Writer(object):
 
         self.file_names        = {  "counts": "counts.txt",
                                     "txt": "variant_details.txt",
-                                    "longtxt": "long_variant_details.txt",
                                     "xls": "variant_details.xlsx",
+                                    "longtxt": "long_variant_details.txt",
                                     "longxls": "long_variant_details.xlsx",
+                                    "svdtxt": "sample_variant_details.txt",
+                                    "svdxls": "sample_variant_details.xlsx",
                                     "bed": "variant_locations.bed",
                                     "featXsamp": "feature_by_sample.xlsx",
                                     "mutXsamp": "feature_and_mutation_by_sample.xlsx",
@@ -294,6 +298,67 @@ class Writer(object):
 
         return True
 
+    def SampleVariantDetails(self):
+        '''
+        Print all information about each mutation,
+        without combining all mutations from different samples
+        Note: chrom, position, ref, alt, feature, and sample are all required to uniquely identify a mutation 
+              indels may have the same chr, pos, but different ref/alt
+
+        Output: sample_variant_details.txt, sample_variant_details.xls
+        Note: switching the pandas ExcelWriter file extension to xlsx instead of xls requires openpyxl
+        '''
+
+        outputDirName = self.outputDirName
+        
+        varDF = self.data
+        if 'svdtxt' in self.config.outputFormats and 'svdtxt' not in self.attempted_formats:
+            svdtxt = bool(True)
+            self.attempted_formats.append('svdtxt')
+        else:
+            svdtxt = bool(False) # User has not opted for this output or this output has already been run 
+        if 'svdxls' in self.config.outputFormats and 'svdxls' not in self.attempted_formats: 
+            svdxls = bool(True)
+            self.attempted_formats.append('svdxls')
+        else:
+            svdxls = bool(False) # User has not opted for this output or this output has already been run 
+
+        try:
+            if svdtxt:
+                outputFileName = self.file_names['svdtxt']
+                ofSampleVariantDetailsTXT = open(outputDirName + "/" + outputFileName, 'w+')
+            if svdxls:
+                outputFileName = self.file_names['svdxls']
+                ofSampleVariantDetailsXLS = pd.ExcelWriter(str(outputDirName) + '/' + outputFileName)
+        except:
+            abortWithMessage("Error opening output files in {0}/".format(outputDirName))
+
+        if svdtxt or svdxls:
+            # add some new columns
+            sources = sorted(varDF['source'].unique(), reverse=True)
+            for source in sources:
+                for col in ['dp','vf']:
+                    this_name = source + "_" + col
+                    varDF.insert(4,this_name,None)
+                    varDF.loc[varDF[varDF['source']==source].index,this_name] = varDF[varDF['source']==source][col]
+            outcols = [x for x in varDF.columns if x not in ['vf','dp']] 
+            # Group by (chr, pos, ref, alt, feature)
+            grouped = varDF[outcols].groupby(['chr', 'pos', 'ref', 'alt', 'feature', 'sample'])
+            # apply collapsing function to each pandas group
+            out = grouped.apply(collapseSVD)
+            out.reset_index(drop=True,inplace=True)
+        if svdtxt:
+            # print the new, collapsed dataframe to a file
+            mySort(out, ['feature','pos']).to_csv(ofSampleVariantDetailsTXT, sep='\t', na_rep='?', index=False)
+            print("\t{0}: {1} rows".format(ofSampleVariantDetailsTXT.name, len(out)))
+        if svdxls:
+            # print the new, collapsed dataframe to file a
+            mySort(out, ['feature','pos']).to_excel(ofSampleVariantDetailsXLS, 'Variant Details', na_rep='?', index=False)
+            ofSampleVariantDetailsXLS.save()
+            print("\t{0}: {1} rows".format(str(outputDirName + '/' + outputFileName), len(out)))
+
+        return True
+
     def LongVariantDetails(self):
         '''
         Similar to printVariantDetails above, but writes each instance
@@ -425,6 +490,30 @@ class Writer(object):
 #     V                            V       #
 # do not write output, but used by writers #
 ############################################
+
+def collapseSVD(group):
+    '''
+    Pandas operations to support the SampleVariantDetails family of functions. 
+    Collapses variant rows that share the same contig, position, ref allele, alt allele, feature, and sample.
+    Input: a pandas groupby object
+    Output: a pandas dataframe object
+    '''   
+    if len(group)==1:
+        #nothing to do here
+        return group
+    outvals = []
+    # sort group to maintain consistency when concatenating source and fn columns
+    group = mySort(group, columns='source')
+    for column in group.columns:
+        uniques = group[column].replace("?",np.nan).dropna().unique()
+        if len(uniques) == 1:
+            outvals.append(uniques[0])
+        elif len(uniques) == 0:
+            outvals.append('?')
+        else:
+            outvals.append(", ".join([x for x in uniques ] ))
+    outD = pd.DataFrame( dict(zip(group.columns,outvals)), index=[0])[group.columns]
+    return outD 
 
 def collapseVariantDetails(group):
     '''
