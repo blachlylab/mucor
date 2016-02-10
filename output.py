@@ -311,7 +311,7 @@ class Writer(object):
 
         outputDirName = self.outputDirName
         
-        varDF = self.data
+        varDF = self.data.copy() # unlike other modules, must copy here to avoid overwriting self.data
         if 'svdtxt' in self.config.outputFormats and 'svdtxt' not in self.attempted_formats:
             svdtxt = bool(True)
             self.attempted_formats.append('svdtxt')
