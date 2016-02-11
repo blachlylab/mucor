@@ -32,7 +32,9 @@ def VAFEuclideanDistance(self):
         for other in samps:
             eucDist = np.sqrt((outDF[sample].subtract(outDF[other])**2).sum())
             eucDF.loc[sample, other] = eucDist
-            # copy this line, inverting indices, to make it symetric
+            eucDF.loc[other, sample] = eucDist
+            # this copied, inverted-indeces line makes the output a symetric square
+            # remove one of these to make output in the form of a non-redundant triangle
     eucDF.to_excel(ofVAFEuclideanDistance, 'Mutation VAF Distance Matrix', na_rep="", index=True)
     try:
         ofVAFEuclideanDistance.save()
