@@ -3,9 +3,11 @@ from pdb import set_trace as stop
 import sys
 import pandas as pd 
 import os
+import argparse 
 
 from output import Writer
 from config import Config
+import output
 
 def unsplit(grp):
     # initialize empty variables for later
@@ -31,9 +33,17 @@ def unsplit(grp):
             outGrp = outGrp.append(_loopGrp)
     return outGrp.reset_index()
 
-def main(fn):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", required=True, help="the curated, sample_variant_details excel format file.")
+    parser.add_argument("-outd", "--output_directory", required=True, help="Name of directory in which to write Mucor output")
+    parser.add_argument("-outt", "--output_type", required=True, help=str("Comma separated list of desired output types. Options include: " + str(output.Writer().supported_formats.keys()).replace("'","") + ". Default: counts,txt"))
+    args = parser.parse_args()
+
+    fn = args.input
     config = Config()
-    config.outputDirName = './'
+    config.outputFormats.append(args.output_type)
+    config.outputDirName = args.output_directory
     print("parsing {0} ... ".format(fn))
     df = pd.io.excel.read_excel(fn)
     print("splitting ... ".format(fn))
@@ -41,11 +51,13 @@ def main(fn):
     fixed.reset_index(drop=True,inplace=True)
     fixed.vf = fixed.vf.astype(float)
     ow = Writer()
-    ow.write(fixed,'eucdist',config.outputDirName,config)
+    ow.write(fixed,args.output_type,config.outputDirName,config)
 
 if __name__ == "__main__":
+    '''
     if os.path.exists('vaf_euclidean_distance.xlsx'):
         print("will not overwrite ./feature_and_mutation_by_sample_vaf.xlsx\nmove it or rename it.")
         exit()
+    '''
 
-    main(sys.argv[1])
+    main()

@@ -249,7 +249,7 @@ class Writer(object):
                 '''
                 eucDF.loc[sample, other] = eucDist
                 # copy this line, inverting indeces, to make it symetric
-        pdb.set_trace()
+        #pdb.set_trace()
         # end mod
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
         try:
