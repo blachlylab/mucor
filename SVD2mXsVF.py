@@ -4,6 +4,7 @@ import sys
 import pandas as pd 
 import os
 import argparse 
+import uuid
 
 from output import Writer
 from config import Config
@@ -45,13 +46,25 @@ def main():
     config.outputFormats.append(args.output_type)
     config.outputDirName = args.output_directory
     print("parsing {0} ... ".format(fn))
-    df = pd.io.excel.read_excel(fn)
-    print("splitting ... ".format(fn))
-    fixed = df.groupby(['chr','pos','ref','alt','feature','sample']).apply(unsplit)
-    fixed.reset_index(drop=True,inplace=True)
-    fixed.vf = fixed.vf.astype(float)
-    ow = Writer()
-    ow.write(fixed,args.output_type,config.outputDirName,config)
+    sampleMask = {}
+    for sheetname in ["calls with mutation type"]:
+        df = pd.io.excel.read_excel(fn, sheetname=sheetname)
+        df['sample'] = df['source']
+        df.drop_duplicates(inplace=True)
+        for samp in df['sample'].unique():
+            if samp not in sampleMask.keys():
+                sampleMask[str(samp)] = str(uuid.uuid4())
+            df.replace(samp, sampleMask[samp], inplace=True)
+        print("splitting ... ".format(fn))
+        fixed = df.groupby(['chr','pos','ref','alt','feature','sample','VarScan_dp']).apply(unsplit)
+        fixed.reset_index(drop=True,inplace=True)
+        fixed.vf = fixed.vf.astype(float)
+        ow = Writer()
+        ow.write(fixed,args.output_type,config.outputDirName,config)
+        thisName = os.path.join(config.outputDirName, 'feature_and_mutation_by_sample_vaf.xlsx')
+        newName  = os.path.join(config.outputDirName, str(sheetname) + '.feature_and_mutation_by_sample_vaf.xlsx')
+        os.rename(thisName, newName)
+    pd.DataFrame(sampleMask, index=[0]).transpose().to_csv('sample_key.csv',sep=',', header=False, index=True)
 
 if __name__ == "__main__":
     '''
