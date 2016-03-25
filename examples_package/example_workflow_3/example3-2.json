@@ -1,0 +1,45 @@
+{
+    "databases": {}, 
+    "fast": "../example_workflow_2/fast", 
+    "feature": "gene_id", 
+    "filters": [
+        ".", 
+        "PASS"
+    ], 
+    "gff": "../example_workflow_2/gencode.v19.annotation.gtf", 
+    "outputDir": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_3/example3-2", 
+    "outputFormats": [ 
+	"svdxls",
+	"txt"
+    ], 
+    "regions": [], 
+    "samples": [
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_3/NA12878/FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "Samtools", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_3/NA12878/Samtools.vcf", 
+                    "snpeff": false, 
+                    "source": "Samtools", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_3/NA12878/VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12878"
+        }
+    ], 
+    "union": false
+}

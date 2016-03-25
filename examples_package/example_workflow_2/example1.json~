@@ -1,0 +1,278 @@
+{
+    "databases": {}, 
+    "fast": "./fast", 
+    "feature": "gene_id", 
+    "filters": [
+        ".", 
+        "PASS"
+    ], 
+    "gff": "./gencode.v19.annotation.gtf", 
+    "outputDir": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/example1", 
+    "outputFormats": [
+        "all"
+    ], 
+    "regions": [], 
+    "samples": [
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12829/NA12829.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12829/NA12829.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12829/NA12829.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12829"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12830/NA12830.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12830/NA12830.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12830/NA12830.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12830"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12842/NA12842.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12842/NA12842.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12842/NA12842.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12842"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12843/NA12843.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12843/NA12843.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12843/NA12843.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12843"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12872/NA12872.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12872/NA12872.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12872/NA12872.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12872"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12873/NA12873.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12873/NA12873.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12873/NA12873.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12873"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12874/NA12874.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12874/NA12874.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12874/NA12874.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12874"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12878/NA12878.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12878/NA12878.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12878/NA12878.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12878"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12889/NA12889.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12889/NA12889.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12889/NA12889.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12889"
+        }, 
+        {
+            "files": [
+                {
+                    "format": "FreeBayes", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12890/NA12890.FreeBayes.vcf", 
+                    "snpeff": false, 
+                    "source": "FreeBayes", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12890/NA12890.VarScan.indels.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.1", 
+                    "type": "vcf"
+                }, 
+                {
+                    "format": "VarScan", 
+                    "path": "/home/OSUMC.EDU/krol06/Tools/mucor/examples_package/example_workflow_2/NA12890/NA12890.VarScan.snps.vcf", 
+                    "snpeff": false, 
+                    "source": "VarScan.2", 
+                    "type": "vcf"
+                }
+            ], 
+            "id": "NA12890"
+        }
+    ], 
+    "union": false
+}

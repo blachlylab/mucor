@@ -28,8 +28,9 @@ def unsplit(grp):
     for badCol in badCols: 
         if grp[badCol[0]].values != "?":
             _loopGrp = blankGrp
-            # assign vf 
+            # assign vf & dp
             _loopGrp['vf'] = grp[badCol[0]]
+            _loopGrp['dp'] = grp[badCol[1]]
             #append this result to the output df
             outGrp = outGrp.append(_loopGrp)
     return outGrp.reset_index()
@@ -39,6 +40,8 @@ def main():
     parser.add_argument("-i", "--input", required=True, help="the curated, sample_variant_details excel format file.")
     parser.add_argument("-outd", "--output_directory", required=True, help="Name of directory in which to write Mucor output")
     parser.add_argument("-outt", "--output_type", required=True, help=str("Comma separated list of desired output types. Options include: " + str(output.Writer().supported_formats.keys()).replace("'","") + ". Default: counts,txt"))
+    parser.add_argument("-mask", "--mask_names", action="store_true", default=False, help="want to mask sample names with UUID?")
+    parser.add_argument("-sh", "--sheet", default="", help="specific sheet to parse")
     args = parser.parse_args()
 
     fn = args.input
@@ -46,25 +49,38 @@ def main():
     config.outputFormats.append(args.output_type)
     config.outputDirName = args.output_directory
     print("parsing {0} ... ".format(fn))
-    sampleMask = {}
-    for sheetname in ["calls with mutation type"]:
-        df = pd.io.excel.read_excel(fn, sheetname=sheetname)
-        df['sample'] = df['source']
-        df.drop_duplicates(inplace=True)
+    
+    if bool(args.mask_names):
+        # init this outside the sheet loop so that UUIDs are consistent across sheets
+        sampleMask = {}
+
+    if bool(args.sheet):
+        df = pd.io.excel.read_excel(fn, sheetname=str(args.sheet))
+    else:
+        df = pd.io.excel.read_excel(fn)
+
+    df['sample'] = df['source']
+    df.drop_duplicates(inplace=True)
+    if bool(args.mask_names):
         for samp in df['sample'].unique():
             if samp not in sampleMask.keys():
                 sampleMask[str(samp)] = str(uuid.uuid4())
             df.replace(samp, sampleMask[samp], inplace=True)
-        print("splitting ... ".format(fn))
-        fixed = df.groupby(['chr','pos','ref','alt','feature','sample','VarScan_dp']).apply(unsplit)
-        fixed.reset_index(drop=True,inplace=True)
-        fixed.vf = fixed.vf.astype(float)
-        ow = Writer()
-        ow.write(fixed,args.output_type,config.outputDirName,config)
+    print("splitting ... ".format(fn))
+    fixed = df.groupby(['chr','pos','ref','alt','feature','sample','VarScan_dp']).apply(unsplit)
+    fixed.reset_index(drop=True,inplace=True)
+    fixed.vf = fixed.vf.astype(float)
+    ow = Writer()
+    ow.write(fixed,args.output_type,config.outputDirName,config)
+    
+    if bool(args.sheet):
+        # rename output to be sheet-specific
         thisName = os.path.join(config.outputDirName, 'feature_and_mutation_by_sample_vaf.xlsx')
-        newName  = os.path.join(config.outputDirName, str(sheetname) + '.feature_and_mutation_by_sample_vaf.xlsx')
+        newName  = os.path.join(config.outputDirName, str(args.sheet) + '.feature_and_mutation_by_sample_vaf.xlsx')
         os.rename(thisName, newName)
-    pd.DataFrame(sampleMask, index=[0]).transpose().to_csv('sample_key.csv',sep=',', header=False, index=True)
+        print("renamed to {0}".format(newName))
+    if bool(args.mask_names):
+        pd.DataFrame(sampleMask, index=[0]).transpose().to_csv(  os.path.join(config.outputDirName, str(args.sheet) + '.sample_key.csv'),sep=',', header=False, index=True)
 
 if __name__ == "__main__":
     '''
