@@ -27,6 +27,7 @@ import numpy as np
 import time
 from info import Info
 
+import eucDist_output
 from mucor import abortWithMessage
 from mucor import throwWarning
 
@@ -63,7 +64,11 @@ class Writer(object):
                                     "mutXsampVAF": "feature_and_mutation_by_sample_vaf.xlsx",
                                     "vcf": "variant_locations.vcf",
                                     "runinfo": "run_info.txt" }
-        
+
+        self.EucDist = eucDist_output.VAFEuclideanDistance.__get__(self,Writer)
+        self.supported_formats["eucdist"] = self.EucDist
+        self.file_names["eucdist"] = "vaf_euclidean_distance.xlsx"
+
     def write(self, data, format, outputDirName, config):
         '''
         Write data in format to outputDirName
@@ -225,9 +230,11 @@ class Writer(object):
         outputFileName = self.file_names['mutXsampVAF']
         varDF = self.data
         ofFeature_and_MutationXSample = pd.ExcelWriter(str(outputDirName) + "/" + outputFileName)
-        
-        outDF = pd.DataFrame(varDF, columns=['feature','chr','pos','ref','alt','sample', 'vf'])
-        outDF = pd.pivot_table(outDF, values='vf', index=['feature','chr','pos','ref','alt'], columns='sample')
+        # apply weighted average to collapse multiple VAFs 
+        outDF = varDF.groupby(['feature','chr','pos','ref','alt','sample']).apply(wavg('vf','dp'))
+        outDF = pd.DataFrame(outDF)
+        # collapse the hierarchical index and pivot 
+        outDF = pd.pivot_table( outDF.reset_index(), values=0, index=['feature','chr','pos','ref','alt'], columns='sample' )
         outDF.to_excel(ofFeature_and_MutationXSample, 'Feat. + Mutation by Sample VAF', na_rep=0, index=True)
         try:
             ofFeature_and_MutationXSample.save()
@@ -516,3 +523,9 @@ def mySort(df, columns=None):
             return df.sort_index()
     else:
         return df.sort(columns=columns)
+
+def wavg(value_column, weight_column):
+    def inner(group):
+        return (group[value_column]*group[weight_column]).sum() / group[weight_column].sum()
+    inner.__name__ = 'wavg'
+    return inner
