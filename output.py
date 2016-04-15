@@ -27,7 +27,7 @@ import numpy as np
 import time
 from info import Info
 
-import eucDist_output
+#import eucDist_output
 from mucor import abortWithMessage
 from mucor import throwWarning
 
@@ -65,9 +65,9 @@ class Writer(object):
                                     "vcf": "variant_locations.vcf",
                                     "runinfo": "run_info.txt" }
 
-        self.EucDist = eucDist_output.VAFEuclideanDistance.__get__(self,Writer)
-        self.supported_formats["eucdist"] = self.EucDist
-        self.file_names["eucdist"] = "vaf_euclidean_distance.xlsx"
+        #self.EucDist = eucDist_output.VAFEuclideanDistance.__get__(self,Writer)
+        #self.supported_formats["eucdist"] = self.EucDist
+        #self.file_names["eucdist"] = "vaf_euclidean_distance.xlsx"
 
     def write(self, data, format, outputDirName, config):
         '''
