@@ -396,7 +396,7 @@ class Writer(object):
         out = varDF.reindex(columns=vcf_fields).fillna('.')                 # drop the columns that are unrelated to vcf format, while reordering columns into proper vcf order
         official_vcf_fields = ['#CHROM','POS','ID', 'REF','ALT', 'QUAL', 'FILTER','INFO']   
         out.columns = pd.Index(official_vcf_fields)                         # rename columns to comply with official vcf standards
-        out.to_csv(ofVariantVCF, sep='\t', na_rep='?', index=False, header=True, sparsify=False)
+        out.to_csv(ofVariantVCF, sep='\t', na_rep='?', index=False, header=True) #, sparsify=False)
         ofVariantVCF.close()
         print("\t{0}: {1} rows".format(ofVariantVCF.name, len(out)))
         return True
