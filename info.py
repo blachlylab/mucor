@@ -15,6 +15,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with Mucor.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 class Info:
     '''Program info: logo, version, and usage'''
     logo = """
@@ -105,3 +107,11 @@ Output directory:
     If the directory already exists, an error will occur (won't overwrite)
 
 """
+
+def abortWithMessage(message):
+    print("*** FATAL ERROR: " + message + " ***")
+    exit(2)
+
+def throwWarning(message, help = False):
+    print("*** WARNING: " + message + " ***")
+    return

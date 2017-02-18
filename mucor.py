@@ -79,7 +79,7 @@ from mucorfeature import MucorFeature
 import inputs
 import output
 from config import Config
-from databases import dbLookup,checkAndOpen 
+from databases import dbLookup, checkAndOpen
 from info import Info
 
 def abortWithMessage(message):
@@ -154,57 +154,7 @@ def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union):
     
     return gas, knownFeatures, duplicateFeatures
 
-def parseJSON(json_config):
-    '''
-    Import the JSON config file from mucor_config.py. 
-    Reads the config file into a dictionary, then writes each dictionary entry into the respective Config class position.
-    '''
-    config = Config()
-    try:
-        JD = json.load(open(json_config,'r'))
-    except ValueError as json_error:
-        throwWarning(json_error.message)
-        abortWithMessage("Could not load the given JSON config file. See the example config for proper formatting.")
-
-    # write dictionary values into a more human-friendly config class
-    config.featureType = JD['feature']
-    config.outputDir = os.path.expanduser(JD['outputDir'])
-    config.union = JD['union']
-    config.fast = JD['fast']
-    config.gff = JD['gff']
-    config.outputFormats = list(set(JD['outputFormats'])) # 'set' prevents repeated formats from being written multiple times
-    if JD['databases']:
-        if 'tabix' in sys.modules: # make sure tabix is imported 
-            for name,db in JD['databases'].items():
-                dbPointer = checkAndOpen(db)
-                if dbPointer:
-                    #check for non-null pointers
-                    config.databases[name] = dbPointer
-        else: # the user supplied databases but did not successfully import tabix
-            throwWarning("tabix module not found; database features disabled")
-    if str(JD['regions']):
-        config.regions = JD['regions']
-    else:
-        config.regions = []
-    # comma separated list of acceptable VCF filter column values
-    config.filters = JD['filters']
-
-    config.inputFiles = []
-    config.samples = []
-    for i in JD['samples']:
-        config.samples.append(i['id'])
-        for j in i['files']:
-            if j['type'] == "bam":
-                # skip the bam files
-                continue
-            filename = os.path.basename(j['path'])
-            config.filename2samples[filename] = i['id']
-            config.source[filename] = j['source']
-            config.inputFiles.append(j['path'])
-
-    return config 
-
-def parseGffFile(gffFileName, featureType, fast, union):
+def parseGffFile(config):
     '''
     Parse the GFF/GTF file. Return tuple (knownFeatures, GenomicArrayOfSets)
     Haplotype contigs are explicitly excluded because of a coordinate crash (begin > end)
@@ -214,6 +164,10 @@ def parseGffFile(gffFileName, featureType, fast, union):
     # This is called --union, see below
     
     startTime = time.clock()
+    gffFileName = config.gff
+    featureType = config.featureType
+    fast = config.fast
+    union = config.union
     print("\n=== Reading GFF/GTF file {0} ===".format(gffFileName))
     
     if union:
@@ -447,13 +401,17 @@ def integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unr
             varD[key].append(vardata[key])
     return varD, unrecognizedContigs, unrecognizedMutations
 
-def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, total) :
+def parseVariantFiles(config, knownFeatures, gas, ) :
     '''
     Read in all input files
     Record mutations in the variant dataframe 
     '''
 
     startTime = time.clock()
+    databases = config.databases 
+    filters = config.filters 
+    regions = config.regions
+    total = config.total
     unrecognizedContigs = set()
     unrecognizedMutations = 0
 
@@ -626,10 +584,11 @@ def parseVariantFiles(config, knownFeatures, gas, databases, filters, regions, t
 
     return varDF, knownFeatures, gas 
 
-def printOutput(config, outputDirName, varDF):
+def printOutput(config, varDF):
     '''Output run statistics and variant details to the specified output directory.'''
 
     startTime = time.clock()
+    outputDirName = config.outputDir
     print("\n=== Writing output files to {0}/ ===".format(outputDirName))
     ow = output.Writer()
     # identify formats ending in 'xlsx' as the "excel formats," requiring XlsxWriter
@@ -663,34 +622,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("json", help="Pass 1 json config as an argument")
     args = parser.parse_args()
-    config = parseJSON(args.json)
+    config = Config()
+    config.parseJSON(args.json)
+    config.validate()
 
-    if not os.path.exists(config.gff):
-        abortWithMessage("Could not find GFF file {0}".format(config.gff))
-    if os.path.exists(config.outputDir) and [x for x in os.listdir(config.outputDir) if x in output.Writer().file_names.values() ]:
-        abortWithMessage("The directory {0} already exists and contains output. Will not overwrite.".format(config.outputDir))
-    elif not os.path.exists(config.outputDir):
-        try:
-            os.makedirs(config.outputDir)
-        except OSError:
-            abortWithMessage("Error when creating output directory {0}".format(config.outputDir))
+    knownFeatures, gas = parseGffFile(config)
+    varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas)
+    printOutput(config, varDF)
 
-    # check that all specified variant files exist
-    for fn in config.inputFiles:
-        if not os.path.exists(fn):
-            abortWithMessage("Could not find variant file: {0}".format(fn))
-
-    # Total is used in frequency calculations. 
-    #   supplying config.samples will use sample count as the denominator [canonical operation, ie: comparing samples]
-    #   or, using samples.inputFiles will use file count [non-canonical operation, ie: comparing tools, or otherwise comparing many vcf files with no regard for sample ID]
-    total = len(set(config.samples))
-
-    knownFeatures, gas = parseGffFile(str(config.gff), str(config.featureType), config.fast, config.union)
-    varDF, knownFeatures, gas = parseVariantFiles(config, knownFeatures, gas, config.databases, config.filters, config.regions, total)
-    printOutput(config, str(config.outputDir), varDF)
-    
     # pretty print newline before exit
-    print()
+    print()		
 
 
 if __name__ == "__main__":
