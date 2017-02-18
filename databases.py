@@ -32,6 +32,8 @@ try:
 except ImportError:
     pass
 
+from info import abortWithMessage
+
 class KnownVariant:
     '''Data about known variants '''
     def __init__(self,source,chrom,pos,ref,alt,rs):
@@ -72,10 +74,6 @@ def checkAndOpen(db):
 
         tb = tabix.open(db)
         return tb
-
-def abortWithMessage(message):
-    print("*** FATAL ERROR: " + message + " ***")
-    exit(2)
 
 def dbLookup(var, dbs):
     '''

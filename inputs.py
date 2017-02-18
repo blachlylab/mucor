@@ -23,10 +23,6 @@ import os
 from variant import Variant
 import numpy as np
 
-def throwWarning(message, help = False):
-    print("*** WARNING: " + message + " ***")
-    return
-
 class Parser(object):
     '''Object to cover all parsing functions'''
 

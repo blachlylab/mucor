@@ -40,14 +40,8 @@ except ImportError as err:
 # mucor modules
 from inputs import Parser 
 from config import Config
+from info import abortWithMessage, throwWarning
 import output
-
-def abortWithMessage(message, help = False):
-    print("*** FATAL ERROR: " + message + " ***")
-    exit(2)
-
-def throwWarning(message, help = False):
-    print("\n*** WARNING: " + message + " ***")
 
 def DetectMalformedColumns(fn):
     '''

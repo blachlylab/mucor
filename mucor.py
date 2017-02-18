@@ -80,15 +80,7 @@ import inputs
 import output
 from config import Config
 from databases import dbLookup, checkAndOpen
-from info import Info
-
-def abortWithMessage(message):
-    print("*** FATAL ERROR: " + message + " ***")
-    exit(2)
-
-def throwWarning(message, help = False):
-    print("*** WARNING: " + message + " ***")
-    return
+from info import Info, abortWithMessage, throwWarning
 
 def constructGAS(gffFile, featureType, knownFeatures, duplicateFeatures, union):
     gas = HTSeq.GenomicArrayOfSets("auto", stranded=False)

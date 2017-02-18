@@ -47,15 +47,8 @@ import pysam
 
 # mucor modules
 from config import Config
+from info import abortWithMessage, throwWarning
 from mucor_config import parseAndValidateRegions 
-
-def abortWithMessage(message):
-    print("*** FATAL ERROR: " + message + " ***")
-    exit(2)
-
-def throwWarning(message, help = False):
-    print("*** WARNING: " + message + " ***")
-    return
 
 def parseJSON(json_config):
     '''

@@ -28,8 +28,7 @@ import time
 from info import Info
 
 #import eucDist_output
-from mucor import abortWithMessage
-from mucor import throwWarning
+from info import abortWithMessage, throwWarning
 
 class Writer(object):
     """Object that parses the mucor dataframe and can write output in several different formats"""
