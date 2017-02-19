@@ -249,19 +249,6 @@ def parseGffFile(config):
 
     return knownFeatures, gas
 
-def parseRegionBed(regionfile, regionDictIn):
-    ''' 
-    Read through the supplied bed file and add the rows to the input region dictionary before returning it. Appends to the input dict, rather than overwriting it.
-    '''
-    regionDict = regionDictIn
-    for line in open(str(regionfile),'r'):
-        col = line.split("\t")
-        chrom = col[0]
-        start = col[1]
-        end = col[2]
-        regionDict[chrom].add((start,end))
-    return regionDict
-
 def filterRow(row, fieldId, filters, kind):
     '''
     returning True means this row will be filtered out [masked]
@@ -278,16 +265,6 @@ def filterRow(row, fieldId, filters, kind):
             if rowFilter not in filters:
                 return True
                 break
-    return False
-
-def inRegionDict(chrom, start, end, regionDict):
-    '''Checks the given mutation location to see if it is in the dictionary of regions'''
-    if regionDict[chrom]: # are there any regions of interest in the same chromosome as this mutation?
-        for locs in regionDict[chrom]: # breaking the list of regions according to chromosome should significantly decrease the number of comparisons necessary 
-            if locs[0] == 0 and locs[1] == 0: # chrN:0-0 is used to define an entire chromosome as a region of interest. 
-                return True
-            elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
-                return True
     return False
 
 def skipThisIndel(var, knownFeatures, featureName):
@@ -401,11 +378,14 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
 
     startTime = time.clock()
     databases = config.databases 
-    filters = config.filters 
     regions = config.regions
     total = config.total
     unrecognizedContigs = set()
     unrecognizedMutations = 0
+    
+    mFilters = mf.MucorFilters()
+    mFilters.vcfFilters = config.filters 
+
 
     # All variants stored in long (record) format
     # in a pandas dataframe
@@ -416,19 +396,7 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
     variantFiles = set(list(config.inputFiles)) # uniquify the file list, in the case of the same multi-sample VCF being defined for multiple samples
 
     if regions: # has the user specified any particular regions or region files to focus on?
-        regionDict = defaultdict(set)
-        for item in regions:
-            if os.path.splitext(item)[1].lower() == 'bed':      # this item is a bed file
-                regionDict = parseRegionBed(item, regionDict)
-            elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
-                reg_chr = str(item.split(':')[0])
-                try:
-                    reg_str = str(str(item.split(':')[1]).split('-')[0])
-                    reg_end = str(str(item.split(':')[1]).split('-')[1])
-                except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
-                    reg_str = 0
-                    reg_end = 0
-                regionDict[reg_chr].add((reg_str, reg_end))
+        mFilters.generateRegionFilter(regions)
 
     print("\n=== Reading Variant Files ===")
     for fn in variantFiles:
@@ -452,7 +420,7 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
             if len(header) == 0: raise ValueError('Invalid header')
             fieldId = dict(zip(header, range(0, len(header))))
             for row in itertools.islice(varReader, None):
-                if filterRow(row, fieldId, filters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
+                if filterRow(row, fieldId, mFilters.vcfFilters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
                     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
                 source = config.source[ os.path.basename(fn) ]
                 parser = inputs.Parser()
@@ -466,7 +434,7 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
                 if not var:
                     # this mutation had no data in this sample
                     continue
-                if regions and not inRegionDict(var.pos.chrom, int(var.pos.pos), int(var.pos.pos), regionDict ):
+                if regions and not mFilters.filterOut(var.pos.chrom, int(var.pos.pos), int(var.pos.pos)):
                     continue
                 varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
 
@@ -476,9 +444,9 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
             varReader.parse_meta()
             varReader.make_info_dict()
             for row in varReader:
-                if row.filter not in filters:
+                if row.filter not in mFilters.vcfFilters:
                     continue
-                if regions and not inRegionDict(row.pos.chrom, int(row.pos.pos), int(row.pos.pos), regionDict ):
+                if regions and not mFilters.filterOut(row.pos.chrom, int(row.pos.pos), int(row.pos.pos)):
                     continue
                 row.unpack_info(varReader.infodict)
                 parser = inputs.Parser()

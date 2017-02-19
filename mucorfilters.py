@@ -17,13 +17,16 @@
 
 # mucorfilters.py
 #
+from collections import defaultdict
 
 class MucorFilters(object):
-	"""docstring for MucorFilters"""
-	def __init__(self):
-		super(MucorFilters, self).__init__()
-		self._filterSets = None					# internally use dict
-		self._filters = None					# internally use dict
+    """docstring for MucorFilters"""
+    def __init__(self):
+        super(MucorFilters, self).__init__()
+        self._filterSets = None					# internally use dict
+        self._filters = None					# internally use dict
+        self.vcfFilters = []
+        self.regionDict = defaultdict(set)
 
 	def loadFromXML(self, rootNode):
 		'''Load filters and filterSets from mucor XML config file.
@@ -130,4 +133,45 @@ class MucorFilters(object):
 		if filterSetName not in self._filterSets.keys(): return None
 
 		return self._filterSets[filterSetName]
+    
+    def parseRegionBed(regionfile, regionDictIn):
+        ''' 
+        Read through the supplied bed file and add the rows to the input region dictionary before returning it. Appends to the input dict, rather than overwriting it.
+        '''
+        regionDict = regionDictIn
+        for line in open(str(regionfile),'r'):
+            col = line.strip().split("\t")
+            chrom = col[0]
+            start = col[1]
+            end = col[2]
+            if len(col) > 3:
+                name = col[3]
+            else:
+                name = str(chrom) + ":" + str(start) + "-" + str(end)
+            regionDict[chrom].add((start, end, name))
+        return regionDict
 
+    def generateRegionFilter(self, regions):
+        for item in regions:
+            if os.path.splitext(item)[1].lower() == 'bed':      # this item is a bed file
+                self.regionDict = parseRegionBed(item, regionDict)
+            elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
+                reg_chr = str(item.split(':')[0])
+                try:
+                    reg_str = str(str(item.split(':')[1]).split('-')[0])
+                    reg_end = str(str(item.split(':')[1]).split('-')[1])
+                except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
+                    reg_str = 0
+                    reg_end = 0
+                regionDict[reg_chr].add((reg_str, reg_end))
+        return
+
+    def filterOut(self, chrom, start, end):
+        '''Checks the given mutation location to see if it is in the dictionary of regions'''
+        if self.regionDict[chrom]: # are there any regions of interest in the same chromosome as this mutation?
+            for locs in self.regionDict[chrom]: # breaking the list of regions according to chromosome should significantly decrease the number of comparisons necessary 
+                if locs[0] == 0 and locs[1] == 0: # chrN:0-0 is used to define an entire chromosome as a region of interest. 
+                    return True
+                elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
+                    return True
+        return False
