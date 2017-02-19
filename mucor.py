@@ -249,24 +249,6 @@ def parseGffFile(config):
 
     return knownFeatures, gas
 
-def filterRow(row, fieldId, filters, kind):
-    '''
-    returning True means this row will be filtered out [masked]
-    returning False means the row will not be filtered out [pass filter]
-    '''
-    if kind in ["vcf", "vcf.gz"]:
-        # this is handled in 1 line elsewhere in the program. Specifically, within the parseVariantFiles function, under the [vcf, vcf.gz] block
-        for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
-            if rowFilter not in filters:
-                return True
-                break
-    if str(kind) == "out":
-        for rowFilter in str(row[fieldId['judgement']]).split(';'): ## MuTect '.out' file format
-            if rowFilter not in filters:
-                return True
-                break
-    return False
-
 def skipThisIndel(var, knownFeatures, featureName):
     '''
     Input a mutation and the current list of known mutations and features
@@ -420,8 +402,10 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
             if len(header) == 0: raise ValueError('Invalid header')
             fieldId = dict(zip(header, range(0, len(header))))
             for row in itertools.islice(varReader, None):
-                if filterRow(row, fieldId, mFilters.vcfFilters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
-                    continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
+                if mFilters.filterRow(row, fieldId, kind):
+                    continue
+                # if filterRow(row, fieldId, mFilters.vcfFilters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
+                #     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
                 source = config.source[ os.path.basename(fn) ]
                 parser = inputs.Parser()
                 parser.row = row

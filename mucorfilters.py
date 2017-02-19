@@ -175,3 +175,19 @@ class MucorFilters(object):
                 elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
                     return True
         return False
+
+    def filterRow(row, fieldId, kind):
+        '''
+        returning True means this row will be filtered out [masked]
+        returning False means the row will not be filtered out [pass filter]
+        '''
+        if kind in ["vcf", "vcf.gz"]:
+            # this is handled in 1 line elsewhere in the program. Specifically, within the parseVariantFiles function, under the [vcf, vcf.gz] block
+            for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
+                if rowFilter not in self.vcfFilters:
+                    return True
+        if str(kind) == "out":
+            for rowFilter in str(row[fieldId['judgement']]).split(';'): ## MuTect '.out' file format
+                if rowFilter not in self.vcfFilters:
+                    return True
+        return False
