@@ -402,10 +402,8 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
             if len(header) == 0: raise ValueError('Invalid header')
             fieldId = dict(zip(header, range(0, len(header))))
             for row in itertools.islice(varReader, None):
-                if mFilters.filterRow(row, fieldId, kind):
+                if mFilters.filterVCFRow(row, kind, fieldId):
                     continue
-                # if filterRow(row, fieldId, mFilters.vcfFilters, kind):  # filter rows as they come in, to prevent them from entering the dataframe
-                #     continue                                # this allows us to print the dataframe directly and have consistent output with variant_details.txt, etc.
                 source = config.source[ os.path.basename(fn) ]
                 parser = inputs.Parser()
                 parser.row = row
@@ -418,8 +416,6 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
                 if not var:
                     # this mutation had no data in this sample
                     continue
-                if regions and not mFilters.filterOut(var.pos.chrom, int(var.pos.pos), int(var.pos.pos)):
-                    continue
                 varD, unrecognizedContigs, unrecognizedMutations = integrateVar(var, varD, config, gas, knownFeatures, unrecognizedContigs, unrecognizedMutations)
 
         elif kind in ["vcf", "vcf.gz"]:
@@ -428,9 +424,7 @@ def parseVariantFiles(config, knownFeatures, gas, ) :
             varReader.parse_meta()
             varReader.make_info_dict()
             for row in varReader:
-                if row.filter not in mFilters.vcfFilters:
-                    continue
-                if regions and not mFilters.filterOut(row.pos.chrom, int(row.pos.pos), int(row.pos.pos)):
+                if mFilters.filterVCFRow(row, kind):
                     continue
                 row.unpack_info(varReader.infodict)
                 parser = inputs.Parser()

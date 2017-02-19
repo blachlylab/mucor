@@ -166,28 +166,37 @@ class MucorFilters(object):
                 regionDict[reg_chr].add((reg_str, reg_end))
         return
 
-    def filterOut(self, chrom, start, end):
-        '''Checks the given mutation location to see if it is in the dictionary of regions'''
-        if self.regionDict[chrom]: # are there any regions of interest in the same chromosome as this mutation?
+    def filterLoc(self, chrom, start, end):
+        '''
+        Checks the given mutation location to see if it is in the dictionary of regions
+        returning True means the loc should be filterd out/ignored since it is not in the region dict
+        returning False means the loc should not be excluded; it is in the regions of interest.  
+        '''
+        if not self.regionDict[chrom]: # are there any regions of interest in the same chromosome as this mutation?
+            return False
+        else:
             for locs in self.regionDict[chrom]: # breaking the list of regions according to chromosome should significantly decrease the number of comparisons necessary 
                 if locs[0] == 0 and locs[1] == 0: # chrN:0-0 is used to define an entire chromosome as a region of interest. 
-                    return True
+                    return False
                 elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
-                    return True
-        return False
+                    return False
 
-    def filterRow(row, fieldId, kind):
+    def filterVCFRow(self, row, kind, fieldId=None):
         '''
+        Checks the vcf filter and/or mutect judgement column for permitted filters
+        If a variant data row has multiple filters, they must all be permitted for the row to pass
+  
         returning True means this row will be filtered out [masked]
         returning False means the row will not be filtered out [pass filter]
         '''
         if kind in ["vcf", "vcf.gz"]:
-            # this is handled in 1 line elsewhere in the program. Specifically, within the parseVariantFiles function, under the [vcf, vcf.gz] block
-            for rowFilter in str(row[fieldId['FILTER']]).split(';'):    ## VCF file format
+            for rowFilter in row.filter.split(';'):    ## VCF file format
                 if rowFilter not in self.vcfFilters:
                     return True
-        if str(kind) == "out":
-            for rowFilter in str(row[fieldId['judgement']]).split(';'): ## MuTect '.out' file format
+            if self.filterLoc(row.pos.chrom, int(row.pos.pos), int(row.pos.pos)):
+                return True
+        if kind == "out":
+            for rowFilter in row[fieldId['judgement']].split(';'): ## MuTect '.out' file format
                 if rowFilter not in self.vcfFilters:
                     return True
         return False
