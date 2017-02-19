@@ -150,7 +150,7 @@ class TestConfigMethods(unittest.TestCase):
         self.config = None
 
     def test_parseJSON(self):
-        f_json = os.path.join("tests","test.json")
+        f_json = os.path.join("tests", "test.json")
         self.config.parseJSON(f_json)
 
         # output formats are de-duped
@@ -163,21 +163,6 @@ class TestConfigMethods(unittest.TestCase):
         self.assertEqual(self.config.filename2samples["sample1.out.vcf"], "Sample1")
         self.assertEqual(self.config.filename2samples["sample2.out.vcf"], "Sample2")
         self.assertEqual(self.config.filename2samples["sample2.out"], "Sample2")
-
-
-    # def test_upper(self):
-    #     self.assertEqual('foo'.upper(), 'FOO')
-
-    # def test_isupper(self):
-    #     self.assertTrue('FOO'.isupper())
-    #     self.assertFalse('Foo'.isupper())
-
-    # def test_split(self):
-    #     s = 'hello world'
-    #     self.assertEqual(s.split(), ['hello', 'world'])
-    #     # check that s.split fails when the separator is not a string
-    #     with self.assertRaises(TypeError):
-    #         s.split(2)
 
 if __name__ == '__main__':
     unittest.main()
