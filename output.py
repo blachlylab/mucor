@@ -22,7 +22,6 @@
 
 import os
 import pandas as pd
-from config import Config
 import numpy as np
 import time
 from info import Info
@@ -35,7 +34,7 @@ class Writer(object):
     
     def __init__(self):
         self.data = pd.DataFrame()
-        self.config = Config()
+        self.config = None
         self.outputDirName = ''
         self.attempted_formats = []     # used to prevent output modules from being executed multiple times
         self.supported_formats = {  "default": self.Default,

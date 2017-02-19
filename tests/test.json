@@ -1,0 +1,71 @@
+{
+    "databases": {},                                 
+    "fast": "fast",                                     
+    "feature": "gene_name",                             
+    "filters": [                                        
+        ".",                                            
+        "PASS"                                          
+    ],                                                  
+    "gff": "gencode.v19.annotation.gtf",                
+    "outputDir": "/home/karl/Projects/mucor/issue14_out",
+    "outputFormats": [                                  
+        "counts",                                       
+        "counts",                                       
+        "txt",                                          
+        "longtxt",                                      
+        "xls",                                          
+        "longxls",                                      
+        "bed",                                          
+        "featXsamp",                                    
+        "mutXsamp",                                     
+        "mutXsampVAF",                                  
+        "vcf",                                          
+        "runinfo"                                       
+    ],                                                  
+    "regions": [],                                      
+    "samples": [                                        
+        {                                               
+            "files": [                                  
+                {                                       
+                    "path": "/home/path/sample1.out.vcf",
+                    "snpeff": false,                    
+                    "source": "VarScan",                
+                    "type": "vcf"                       
+                }                                       
+            ],                                          
+            "id": "Sample1"                             
+        },                                              
+        {                                               
+            "files": [                                  
+                {                                       
+                    "path": "/home/path/sample2.out.vcf",
+                    "snpeff": false,                    
+                    "source": "VarScan",                
+                    "type": "vcf"                       
+                }                                       
+            ],                                          
+            "id": "Sample2"                             
+        },                                              
+        {                                               
+            "files": [                                  
+                {                                       
+                    "path": "/home/path/r1.bam",        
+                    "type": "bam"                       
+                }                                       
+            ],                                          
+            "id": "Sample1"                             
+        },                                              
+        {                                               
+            "files": [                                  
+                {                                       
+                    "path": "/home/path/sample2.out",   
+                    "snpeff": false,                    
+                    "source": "Mutect",                 
+                    "type": "mutect"                    
+                }                                       
+            ],                                          
+            "id": "Sample2"                             
+        }                                               
+    ],                                                  
+    "union": false
+}

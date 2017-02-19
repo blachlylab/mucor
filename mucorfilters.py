@@ -18,6 +18,7 @@
 # mucorfilters.py
 #
 from collections import defaultdict
+import os
 
 class MucorFilters(object):
     """docstring for MucorFilters"""
@@ -134,11 +135,10 @@ class MucorFilters(object):
 
 		return self._filterSets[filterSetName]
     
-    def parseRegionBed(regionfile, regionDictIn):
+    def parseRegionBed(self, regionfile):
         ''' 
-        Read through the supplied bed file and add the rows to the input region dictionary before returning it. Appends to the input dict, rather than overwriting it.
+        Read through the supplied bed file and add the rows to the object region dictionary before returning it. Appends to the object dict, rather than overwriting it.
         '''
-        regionDict = regionDictIn
         for line in open(str(regionfile),'r'):
             col = line.strip().split("\t")
             chrom = col[0]
@@ -148,13 +148,13 @@ class MucorFilters(object):
                 name = col[3]
             else:
                 name = str(chrom) + ":" + str(start) + "-" + str(end)
-            regionDict[chrom].add((start, end, name))
-        return regionDict
+            self.regionDict[chrom].add((start, end, name))
+        return
 
     def generateRegionFilter(self, regions):
         for item in regions:
-            if os.path.splitext(item)[1].lower() == 'bed':      # this item is a bed file
-                self.regionDict = parseRegionBed(item, regionDict)
+            if os.path.splitext(item)[1].lower() == '.bed':      # this item is a bed file
+                self.parseRegionBed(item)
             elif str(str(item).split(':')[0]).startswith('chr'):    # this is a string 
                 reg_chr = str(item.split(':')[0])
                 try:
@@ -163,7 +163,7 @@ class MucorFilters(object):
                 except IndexError:                                  # represent whole chromosome regions [ex: chr2] by chrN:0-0 in the region dictionary   
                     reg_str = 0
                     reg_end = 0
-                regionDict[reg_chr].add((reg_str, reg_end))
+                self.regionDict[reg_chr].add((reg_str, reg_end))
         return
 
     def filterLoc(self, chrom, start, end):
@@ -180,6 +180,7 @@ class MucorFilters(object):
                     return False
                 elif int(start) >= int(locs[0]) and int(end) <= int(locs[1]):
                     return False
+        return True
 
     def filterVCFRow(self, row, kind, fieldId=None):
         '''
